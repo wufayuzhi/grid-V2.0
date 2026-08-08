@@ -201,8 +201,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto Sans
 .adj-canceled td{background:rgba(59,130,246,.16)!important}
 .adj-filled td{background:rgba(16,185,129,.18)!important}
 .adj-other{color:#6B7280}
-/* 撤销单类型文字用紫(区别于红/绿/蓝)，用户2026-08-09定 */
-td.adj-canceled{color:#8B5CF6;font-weight:700}
+/* 混合组(一成交一撤销)里的撤销行整行文字橙色，用户2026-08-09定 */
+tr.adj-mixed-cancel td{color:#F97316}
 /* 撤销单负号加粗 */
 .oc-neg{font-weight:700}
 /* 已成交列拆"开/平"两小格 */
@@ -2211,9 +2211,7 @@ function adjRow(r, showInst) {
     if (mixed) {
       typeTd = `<td class="${dFilled ? 'adj-filled' : 'adj-canceled'}">${dFilled ? '成交单' : '撤销单'}</td>`;
     } else {
-      // 合并类型格：撤销单也上紫色
-      const tCls = label === '撤销单' ? ' class="adj-canceled"' : '';
-      typeTd = isFirst ? `<td rowspan="${n}"${tCls}>${label}</td>` : '';
+      typeTd = isFirst ? `<td rowspan="${n}">${label}</td>` : '';
     }
     const dir = d.dir_label || dirTxt(d.side, d.pos_side) || sideTxt(r.side);
     // 手续费：detail自带fee优先，否则按价值占比分摊顶层fee
@@ -2244,7 +2242,9 @@ function adjRow(r, showInst) {
     const filledTxt = `<span class="oc">开 ${ocFmt(openS)}</span><span class="oc oc2">平 ${ocFmt(closeS)}</span>`;
     // 行背景：按整组判定统一上色（组内任一成交→整组绿；双向全撤→整组蓝）
     const rowCls = groupFilled ? 'adj-filled' : 'adj-canceled';
-    return `<tr class="${rowCls}">${seqTd}${inst}${timeTd}${typeTd}<td>${dir}</td>` +
+    // 混合组里的撤销行：整行文字橙色（区分成交/撤销），用户2026-08-09定
+    const mixedCls = (mixed && !dFilled) ? ' adj-mixed-cancel' : '';
+    return `<tr class="${rowCls}${mixedCls}">${seqTd}${inst}${timeTd}${typeTd}<td>${dir}</td>` +
            `<td class="num">${(d.px || 0).toFixed(4)}</td><td class="num">${filledTxt}</td>` +
            `<td class="num">${(d.value || 0).toFixed(2)}</td>${feeTd}</tr>`;
   }).join('');
