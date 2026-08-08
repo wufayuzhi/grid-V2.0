@@ -1,0 +1,30 @@
+# ===== .dockerignore =====
+# 构建镜像时排除:密钥/版本控制/缓存/运行数据/部署脚本
+# ⚠️ .env.wecom 含 Bot Secret/webhook/OpenRouter key,必须排除,绝不能进镜像
+
+# 企业微信凭证(绝不能进镜像)
+.env.wecom
+
+# Git
+.git
+.gitignore
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# 运行数据(由 volume 挂载,不进镜像)
+data/
+/app/data/
+
+# 部署/备份/临时
+docker-compose*.yml
+deploy.sh
+*.bak.*
+*_backup_*.html
+*.tmp
+*.log

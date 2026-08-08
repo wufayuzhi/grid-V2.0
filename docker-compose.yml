@@ -1,0 +1,48 @@
+# Grid-V2.0 Docker Compose — 2 容器方案
+# 容器1 grid-v2-app  : 后端 API + 前端页面 (uvicorn:8001)
+# 容器2 grid-v2-notify: 企业微信智能机器人长链接 (notifier.py)
+#
+# 用法:
+#   docker compose up -d --build     # 构建并启动
+#   docker compose ps                # 查看状态
+#   docker compose logs -f grid-v2-app   # 看后端日志
+#   docker compose down              # 停止(数据保留在卷里)
+# 也可直接跑 ./deploy.sh 一键部署(含健康检查)
+
+services:
+  grid-v2-app:
+    build: .
+    image: grid-v2:latest
+    container_name: grid-v2-app
+    command: uvicorn main:app --host 0.0.0.0 --port 8001
+    env_file: .env.wecom
+    environment:
+      - PORT=8001
+    volumes:
+      - grid-v2-data:/app/data
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  grid-v2-notify:
+    build: .
+    image: grid-v2:latest
+    container_name: grid-v2-notify
+    command: python3 notifier.py
+    env_file: .env.wecom
+    environment:
+      - GRID_API=http://grid-v2-app:8001
+    volumes:
+      - grid-v2-data:/app/data
+    depends_on:
+      - grid-v2-app
+    restart: unless-stopped
+
+volumes:
+  grid-v2-data:
