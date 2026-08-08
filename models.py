@@ -1,0 +1,317 @@
+"""
+领域模型 —— 只定义数据字段，不藏公式。
+所有计算在 formulas/ 层，状态在 state.py，此处仅数据结构。
+"""
+from __future__ import annotations
+from dataclasses import dataclass, field
+
+
+@dataclass
+class GridPosition:
+    """持仓数据（全部来自交易所，不在这里算）"""
+    inst_id: str = ""
+    # 多头
+    long_contracts: int = 0
+    long_avg_px: float = 0.0
+    long_unrealized_pnl: float = 0.0
+    long_liq_px: float = 0.0      # 强平价（交易所）
+    long_be_px: float = 0.0       # 盈亏平衡价（交易所）
+    # 空头
+    short_contracts: int = 0
+    short_avg_px: float = 0.0
+    short_unrealized_pnl: float = 0.0
+    short_liq_px: float = 0.0     # 强平价（交易所）
+    short_be_px: float = 0.0      # 盈亏平衡价（交易所）
+    # 通用
+    mark_px: float = 0.0          # 标记价
+    last_px: float = 0.0          # 最新成交价（网格锚点主源）
+    liqPx: float = 0.0            # 兼容字段（组合强平，交易所能给则给）
+    position_margin: float = 0.0  # 持仓保证金（交易所）
+    notional_usd: float = 0.0     # 名义价值（交易所）
+
+
+@dataclass
+class GridState:
+    """网格状态 —— 只存数据 + 持久化，不藏公式"""
+    # ── 运行状态 ──
+    running: bool = False
+    paused: bool = False
+    inst_id: str = ""
+    margin_mode: str = "usdt"     # "usdt" or "coin"
+    simulated: bool = False
+    ct_val: float = 0.0           # 合约面值（交易所）
+    leverage: int = 20
+
+    # ── 账户 ──
+    total_equity: float = 1000.0  # 总权益（交易所）
+    capital: float = 1000.0       # 本金
+    reserved_capital: float = 0.0
+    total_pnl: float = 0.0
+    total_fee: float = 0.0
+
+    # ── 持仓 ──
+    position: GridPosition = field(default_factory=GridPosition)
+
+    # ── 网格状态 ──
+    grid_upper_px: float = 0.0
+    grid_lower_px: float = 0.0
+    grid_count: int = 0
+    pending_iceberg: int = 0
+
+    # ── 建仓 ──
+    initial_contracts: int = 0
+    single_limit: int = 0
+    build_ts: float = 0.0
+
+    # ── 人工参数（前端可调）──
+    # 止盈线
+    tp_base_pct: float = 1.0       # 止盈线基础%（24h）
+    tp_window_hours: float = 24.0  # 止盈时间档（每档递增）
+    # 失衡率
+    imbalance_threshold_pct: float = 20.0   # 失衡紧张阈值
+    imbalance_blowup_pct: float = 70.0      # 失衡爆表阈值
+    rebalance_target_pct: float = 10.0      # 回补目标失衡率
+    # 风控
+    safety_factor: float = 0.7
+    shrink_pct: float = 10.0
+    bleed_threshold_pct: float = 3.0
+    # 网格
+    target_spacing_pct: float = 0.60
+    adj_ratio: float = 0.06
+    price_offset_pct: float = 0.2
+    adjust_split_ratio: float = 0.5
+    # 冰山
+    iceberg_sz: int = 2
+    pxVar: float = 1.0
+    # OI
+    oi_spike_pct: float = 15.0
+    oi_drop_pct: float = -5.0
+    oi_lock_base: int = 5
+    # 开关
+    auto_adjust: bool = True
+    use_iceberg: bool = True
+    use_risk_control: bool = True
+    use_bleed_melt: bool = True
+    use_dynamic_params: bool = True
+    # 失衡回补(B)开关：默认关=以A(挂单调价格/单边防堆仓)为主，失衡靠盈亏平衡点抬升渐进化解；
+    # 开启时才在失衡>阈值时市价减重仓侧(主动砍仓)，默认停用(用户2026-08定案)
+    use_rebalance: bool = False
+
+    # ── 网格密度 / 失衡防堆仓（统一设计文档 2026-08-06 定稿，批次1）──
+    base_density: float = 2.0          # 基础网格密度（进攻模式 base）
+    defense_density: float = 2.0       # 防守网格密度（防守模式 base）
+    mode: str = "attack"               # attack进攻 / defense防守（人工切）
+    one_way_threshold: float = 60.0    # 单向成交阈值(%)
+    ladder_rates: list = field(default_factory=lambda: [40, 50, 60, 70, 80])   # 档位失衡率
+    ladder_densities: list = field(default_factory=lambda: [1.4, 1.0, 0.75, 0.5, 0.3])  # 档位密度
+    # bePx 防抖/紧急迟滞
+    confirm_time: float = 30.0         # 确认时间 T(秒)
+    exit_buffer: float = 5.0           # 退出缓冲(%)
+    debounce_loss_line: float = -0.5   # 防抖·亏损线(%)
+    debounce_profit_line: float = 0.2  # 防抖·盈利线(%)
+    # ATR 参数
+    atr_timeframe: str = "1H"          # ATR 时间框架（默认1H）
+    atr_period: int = 24               # ATR 周期 N
+    density_min: float = 0.3           # 网格密度下限（滑块0.3~1.0；下限=max(设定, 2×费率÷ATR%)）
+    # 统一口径
+    cumulative_added: float = 0.0      # 累计追加本金（失血/累计回撤/防抖线分母剔除）
+
+    # ── 批次2：三条全平防线（统一优先级裁决链 2026-08-06 定稿）──
+    cumulative_drawdown_threshold: float = 5.0  # 累计回撤阈值%(滑块3~15)
+    safety_flat_threshold: float = 5.0          # 安全距离全平阈值%(滑块3~10)
+    peak_upl: float = 0.0                       # 高水位净浮盈(自上次全平/重建起的最高净浮盈)
+    auto_rebuild_blocked: bool = False          # 熔断类全平后禁止自动重建(人工grid/start重置)
+    flat_reason: str = ""                       # 最近一次全平原因(止盈/失血/累计回撤/安全距离/手动)
+    flat_ts: float = 0.0                        # 最近一次全平时间戳
+
+    # ── 批次3：单边趋势跟踪参数化（文档§单边趋势定稿，替代 trend.py 硬编码）──
+    trend_tf: str = "4H"          # 趋势时间框架(文档:4H, 下拉1H/4H/6H/1D)
+    ema_fast: int = 10            # EMA快周期(文档:10)
+    ema_slow: int = 55            # EMA慢周期(文档:55)
+    st_period: int = 14           # SuperTrend ATR周期(文档:14, 代码现在是10错)
+    st_mult: float = 3.0          # SuperTrend 乘数(文档:3)
+    oi_n: int = 3                 # OI根数N(滑块1~10, OI窗口=N×趋势TF)
+
+
+    # ── 币种特征 ──
+    coin_amplitude_24h: float = 0.0
+    amp_7d: float = 0.0
+    dr_24h: float = 0.0
+    dr_7d: float = 0.0
+    atr_abs: float = 0.0          # 真实波幅ATR（绝对价，日线TR均值，网格间距用）
+    atr_pct: float = 0.0          # ATR相对当前价百分比
+
+    # ── 网格挂单追踪（事件驱动成交检测）──
+    grid_upper_ord_ids: list = field(default_factory=list)   # 上端组(平多+开空) ordId
+    grid_lower_ord_ids: list = field(default_factory=list)   # 下端组(平空+开多) ordId
+    last_rebalance_ts: float = 0.0        # 上次回补时间戳（冷却防重复下单）
+
+    # ── 时间 ──
+    data_loop_interval: float = 2.0
+    oi_full_refresh_interval: float = 30.0
+    oi_history_size: int = 30
+    oi_sample_count: int = 3
+    bleed_window_sec: float = 5.0
+    equity_history_window_sec: float = 30.0
+
+    # ── API ──
+    api_timeout: int = 10
+    health_stale_sec: float = 30.0
+    health_max_failures: int = 3
+
+    # ── 记录 ──
+    equity_history: list = field(default_factory=list)
+    adjust_history: list = field(default_factory=list)
+    logs: list = field(default_factory=list)
+    adjust_records: list = field(default_factory=list)
+    adjust_seen_ord_ids: list = field(default_factory=list)
+
+    # ── 衍生展示值（由 formulas 计算写入，非交易所直接返回）──
+    imbalance_rate: float = 0.0      # 失衡率%（公式计算）
+    amp_composite: float = 0.0       # 综合振幅%（公式计算）
+    dr_composite: float = 0.0        # 综合方向性比率（公式计算）
+    safety_distance_pct: float = 999.0  # 安全距离%（公式计算）
+
+    # ── 计算详情（供前端展示）──
+    calc_details: dict = field(default_factory=dict)
+
+    # ═══ 契约方法（前端依赖的展示结构）═══
+
+    @property
+    def grid_available(self) -> float:
+        """可用于网格的资金 = 总权益 - 预留。"""
+        if self.total_equity is None:
+            return 0.0
+        return self.total_equity - self.reserved_capital
+
+    def add_log(self, msg: str, level: str = "INFO", cat: str = "STATE", data: dict | None = None):
+        import time
+        from diagnostic_logger import get_diag_logger
+        get_diag_logger().log(level, cat, msg, data)
+        self.logs.append({"ts": time.strftime("%H:%M:%S"),
+                          "msg": msg, "level": level, "cat": cat})
+        if len(self.logs) > 500:
+            self.logs = self.logs[-300:]
+
+    def record_equity(self):
+        import time
+        self.equity_history.append((time.time(), self.total_equity))
+        now = time.time()
+        self.equity_history[:] = [
+            (t, e) for t, e in self.equity_history
+            if now - t <= self.equity_history_window_sec]
+
+    def to_dict(self) -> dict:
+        """前端契约：返回完整展示结构（路径/字段名与旧版一致）。"""
+        pos = self.position
+        return {
+            "running": self.running,
+            "inst_id": self.inst_id,
+            "margin_mode": self.margin_mode,
+            "simulated": self.simulated,
+            "ct_val": self.ct_val,
+            "mark_px": round(pos.mark_px, 4),
+            "last_px": round(pos.last_px, 4),
+            "liqPx": round(pos.liqPx, 4),
+            "safety_distance_pct": round(self.safety_distance_pct, 2),
+            "total_equity": round(self.total_equity, 2) if self.total_equity is not None else 0.0,
+            "reserved_capital": round(self.reserved_capital, 2),
+            "grid_available": round(self.grid_available, 2),
+            "total_pnl": round(self.total_pnl, 2),
+            "grid_count": self.grid_count,
+            "grid_upper_px": round(self.grid_upper_px, 2),
+            "grid_lower_px": round(self.grid_lower_px, 2),
+            "pending_iceberg": self.pending_iceberg,
+            "net_exposure": pos.long_contracts - pos.short_contracts,
+            "total_contracts": pos.long_contracts + pos.short_contracts,
+            "imbalance_rate": round(self.imbalance_rate, 2),
+            "dominant_side": "long" if pos.long_contracts > pos.short_contracts
+            else ("short" if pos.short_contracts > pos.long_contracts else "none"),
+            "position_margin": round(pos.position_margin, 2),
+            "long": {
+                "contracts": pos.long_contracts,
+                "avg_px": round(pos.long_avg_px, 4),
+                "unrealized_pnl": round(pos.long_unrealized_pnl, 2),
+                "liq_px": round(pos.long_liq_px, 4),
+                "be_px": round(pos.long_be_px, 4),
+            },
+            "short": {
+                "contracts": pos.short_contracts,
+                "avg_px": round(pos.short_avg_px, 4),
+                "unrealized_pnl": round(pos.short_unrealized_pnl, 2),
+                "liq_px": round(pos.short_liq_px, 4),
+                "be_px": round(pos.short_be_px, 4),
+            },
+            "params": {
+                "capital": round(self.grid_available, 2),
+                "reserved": round(self.reserved_capital, 2),
+                "grid_available": round(self.grid_available, 2),
+                "leverage": self.leverage,
+                "imbalance_threshold": self.imbalance_threshold_pct,
+                "initial_contracts": self.initial_contracts,
+                "paused": self.paused,
+                "single_limit": self.single_limit,
+                "iceberg_sz": self.iceberg_sz,
+                "pxVar": self.pxVar,
+                "auto_adjust": self.auto_adjust,
+                "use_iceberg": self.use_iceberg,
+                "use_risk_control": self.use_risk_control,
+                "use_bleed_melt": self.use_bleed_melt,
+                "use_rebalance": self.use_rebalance,
+                "safety_factor": self.safety_factor,
+                "shrink_pct": self.shrink_pct,
+                "oi_spike_pct": self.oi_spike_pct,
+                "oi_drop_pct": self.oi_drop_pct,
+                "oi_lock_base": self.oi_lock_base,
+                "bleed_threshold_pct": self.bleed_threshold_pct,
+                "tp_base_pct": self.tp_base_pct,
+                "tp_window_hours": self.tp_window_hours,
+                "imbalance_blowup_pct": self.imbalance_blowup_pct,
+                "rebalance_target_pct": self.rebalance_target_pct,
+                "price_offset_pct": self.price_offset_pct,
+                "adjust_split_ratio": self.adjust_split_ratio,
+                "data_loop_interval": self.data_loop_interval,
+                "oi_full_refresh_interval": self.oi_full_refresh_interval,
+                "oi_history_size": self.oi_history_size,
+                "oi_sample_count": self.oi_sample_count,
+                "bleed_window_sec": self.bleed_window_sec,
+                "equity_history_window_sec": self.equity_history_window_sec,
+                "api_timeout": self.api_timeout,
+                "health_stale_sec": self.health_stale_sec,
+                "health_max_failures": self.health_max_failures,
+                "coin_amplitude_24h": round(self.coin_amplitude_24h, 2),
+                "dr_24h": round(self.dr_24h, 3),
+                "dr_7d": round(self.dr_7d, 3),
+                "atr_abs": round(self.atr_abs, 2),
+                "atr_pct": round(self.atr_pct, 3),
+                "use_dynamic_params": self.use_dynamic_params,
+                "target_spacing_pct": self.target_spacing_pct,
+                "adj_ratio": self.adj_ratio,
+                "base_density": self.base_density,
+                "defense_density": self.defense_density,
+                "mode": self.mode,
+                "one_way_threshold": self.one_way_threshold,
+                "ladder_rates": list(self.ladder_rates),
+                "ladder_densities": list(self.ladder_densities),
+                "confirm_time": self.confirm_time,
+                "exit_buffer": self.exit_buffer,
+                "debounce_loss_line": self.debounce_loss_line,
+                "debounce_profit_line": self.debounce_profit_line,
+                "atr_timeframe": self.atr_timeframe,
+                "atr_period": self.atr_period,
+                "current_density": getattr(self, "current_density", None),
+                "emergency_state": getattr(self, "emergency_state", None),
+                "heavy_side": getattr(self, "heavy_side", None),
+                "heavy_state": getattr(self, "heavy_state", None),
+                "cumulative_drawdown_threshold": self.cumulative_drawdown_threshold,
+                "safety_flat_threshold": self.safety_flat_threshold,
+                "peak_upl": round(self.peak_upl, 2),
+                "auto_rebuild_blocked": self.auto_rebuild_blocked,
+                "flat_reason": self.flat_reason,
+                "flat_ts": self.flat_ts,
+                "grid_upper_px": round(self.grid_upper_px, 2),
+                "grid_lower_px": round(self.grid_lower_px, 2),
+            },
+            "adjust_history": self.adjust_history[-20:],
+            "calc_details": self.calc_details,
+        }

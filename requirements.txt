@@ -1,0 +1,5 @@
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+python-okx>=0.4.1
+openpyxl>=3.1.0
+websockets>=12.0

@@ -1,0 +1,157 @@
+/* OKX-KUI-V2 暗色主题 — 三栏布局：候选池/实时行情 | 持仓/挂单/历史 | 账户/日志 */
+:root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-panel: #1c2128;
+    --bg-hover: #252b33;
+    --border: #2d333b;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #5d6873;
+    --green: #3fb950;
+    --red: #f85149;
+    --yellow: #d29922;
+    --blue: #58a6ff;
+    --font-size: 14px;
+    --font-small: 13px;
+    --font-xs: 12px;
+    --radius: 6px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+    font-size: var(--font-size);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* 顶栏 */
+#topbar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 14px; background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border); flex-shrink: 0; height: 44px;
+}
+#topbar .title { font-size: 16px; font-weight: 700; letter-spacing: 0.5px; }
+.status-badge { font-size: var(--font-xs); padding: 2px 10px; border-radius: 10px; background: #2d2d2d; color: var(--text-muted); }
+.status-badge.active { background: #0f3d1e; color: var(--green); }
+#topbar .gap { flex:1; }
+#topbar button { font-size: var(--font-small); padding: 4px 12px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg-panel); color:var(--text-primary); cursor:pointer; white-space:nowrap; }
+#topbar button:hover { background: var(--bg-hover); }
+#btn-toggle { background: #1b4a3f; border-color: #2d6b5a; color: var(--green); }
+.api-key-btn { border-color: var(--blue) !important; color: var(--blue) !important; }
+#topbar .sep { width:1px; height:20px; background:var(--border); margin:0 4px; }
+#topbar .group-label { font-size:var(--font-xs); color:var(--text-muted); }
+
+/* 主面板三栏 */
+#main { display:flex; flex:1; min-height:0; gap:1px; background:var(--border); }
+.panel { background:var(--bg-panel); display:flex; flex-direction:column; min-width:0; overflow:hidden; }
+#left-panel   { flex: 1.2; }
+#center-panel { flex: 1.6; border-left:1px solid var(--border); border-right:1px solid var(--border); }
+#right-panel  { flex: 0.9; display:flex; flex-direction:column; }
+
+.panel-header {
+    font-size: var(--font-small); font-weight: 600; color: var(--text-secondary);
+    padding: 7px 12px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 6px; flex-shrink: 0; background: var(--bg-secondary);
+}
+.badge-count { font-size:var(--font-xs); background:var(--bg-hover); color:var(--text-muted); padding:1px 7px; border-radius:8px; }
+
+/* 左栏：上候选池 / 下实时行情 */
+#left-panel .split-top { flex: 1.5; overflow-y: auto; min-height: 0; }
+#left-panel .split-bottom { flex: 1; overflow-y: auto; min-height: 0; }
+
+/* 中栏 / 右栏分段 */
+#center-panel .section, #right-panel .section {
+    border-bottom: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0;
+}
+#center-panel .section:last-child, #right-panel .section:last-child { border-bottom: none; }
+.section-data { flex:1; overflow-y:auto; min-height:0; }
+
+/* ─── 固定列宽表格（候选池 + 实时行情） ─── */
+.grid-table { table-layout: fixed; width: 100%; border-collapse: collapse; }
+.grid-table thead { position: sticky; top: 0; z-index: 1; }
+.grid-table th {
+    background: var(--bg-primary); color: var(--text-muted); font-weight: 500;
+    padding: 5px 4px; text-align: left; border-bottom: 1px solid var(--border);
+    white-space: nowrap; font-size: var(--font-xs);
+    cursor: pointer; user-select: none;
+}
+.grid-table th.num { text-align: right; }
+.grid-table th .sort-icon::after { content: ''; margin-left: 2px; }
+.grid-table th.sorted-asc .sort-icon::after { content: '▲'; color: var(--blue); }
+.grid-table th.sorted-desc .sort-icon::after { content: '▼'; color: var(--blue); }
+.grid-table td {
+    padding: 3px 4px; border-bottom: 1px solid rgba(45,51,59,0.4); white-space: nowrap;
+}
+.grid-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.grid-table tbody tr:hover { background: var(--bg-hover); }
+.grid-table tbody tr:nth-child(even) { background: rgba(22,27,34,0.3); }
+
+/* 候选池列宽 */
+.col-rank  { width: 8%; }
+.col-name  { width: 28%; }
+.col-price { width: 22%; }
+.col-vol   { width: 18%; }
+.col-amp   { width: 14%; }
+.col-score { width: 10%; }
+.col-change { width: 22%; }
+.col-volume { width: 22%; }
+
+/* 价格涨跌底色（实时比上次） */
+td .chg-up { background: rgba(63,185,80,0.15); padding:1px 6px; border-radius:3px; font-weight:600; color:#7ee787; }
+td .chg-down { background: rgba(248,81,73,0.15); padding:1px 6px; border-radius:3px; font-weight:600; color:#ff6b5b; }
+td.green { color: var(--green); }
+td.red { color: var(--red); }
+
+/* 普通表格（持仓/挂单/历史） */
+table:not(.grid-table) { width:100%; border-collapse:collapse; font-size:var(--font-small); }
+table:not(.grid-table) thead { position:sticky; top:0; z-index:1; }
+table:not(.grid-table) th {
+    background:var(--bg-primary); color:var(--text-muted); font-weight:500;
+    padding:5px 8px; text-align:left; border-bottom:1px solid var(--border);
+    white-space:nowrap; font-size:var(--font-xs);
+}
+table:not(.grid-table) td { padding:3px 8px; border-bottom:1px solid rgba(45,51,59,0.4); white-space:nowrap; }
+table:not(.grid-table) tbody tr:hover { background:var(--bg-hover); }
+table:not(.grid-table) td.num { text-align:right; font-variant-numeric:tabular-nums; }
+
+/* 账户指标 */
+.metric-group { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--border); }
+.metric { display:flex; flex-direction:column; padding:10px 14px; background:var(--bg-panel); }
+.metric .label { font-size:var(--font-xs); color:var(--text-muted); }
+.metric .value { font-size:16px; font-weight:700; margin-top:2px; }
+
+/* 日志 */
+#log-area { flex:1; overflow-y:auto; padding:6px 10px; font-size:var(--font-xs); font-family:'SF Mono','Fira Code',monospace; line-height:1.6; min-height:0; }
+.log-msg { color:var(--text-secondary); }
+.log-info { color:var(--blue); }
+.log-buy { color:var(--green); }
+.log-sell { color:var(--red); }
+
+/* 空状态 */
+.no-data { font-size:var(--font-small); color:var(--text-muted); padding:24px; text-align:center; }
+
+/* 颜色 */
+.green { color:var(--green); }
+.red { color:var(--red); }
+
+/* 弹出窗 */
+.modal-overlay { display:none; position:fixed; top:0;left:0;right:0;bottom:0; background:rgba(0,0,0,0.65); z-index:100; justify-content:center; align-items:center; }
+.modal-overlay.show { display:flex; }
+.modal { background:var(--bg-panel); border:1px solid var(--border); border-radius:10px; padding:22px; min-width:420px; max-width:520px; }
+.modal h3 { font-size:16px; margin-bottom:16px; }
+.modal .form-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.modal .form-row label { font-size:var(--font-small); color:var(--text-secondary); min-width:80px; flex-shrink:0; }
+.modal .form-row input[type="text"], .modal .form-row input[type="password"] { flex:1; padding:6px 10px; font-size:var(--font-small); background:var(--bg-primary); border:1px solid var(--border); border-radius:var(--radius); color:var(--text-primary); }
+.modal .form-row input[type="number"] { width:100px; padding:6px 10px; font-size:var(--font-small); background:var(--bg-primary); border:1px solid var(--border); border-radius:var(--radius); color:var(--text-primary); }
+.modal .form-row .unit { font-size:var(--font-small); color:var(--text-muted); }
+.btn-row { display:flex; gap:8px; margin-top:16px; justify-content:flex-end; }
+.btn-primary { background:var(--blue); color:#fff; border:none; padding:6px 16px; border-radius:var(--radius); font-size:var(--font-small); cursor:pointer; }
+.btn-primary:hover { filter:brightness(1.1); }
+.btn-secondary { background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border); padding:6px 16px; border-radius:var(--radius); font-size:var(--font-small); cursor:pointer; }
+.btn-secondary:hover { background:var(--bg-hover); }
+.btn-small { font-size:var(--font-xs); background:var(--bg-hover); color:var(--text-secondary); border:1px solid var(--border); padding:3px 10px; border-radius:var(--radius); cursor:pointer; }
