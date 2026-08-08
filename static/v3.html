@@ -201,8 +201,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto Sans
 .adj-canceled td{background:rgba(59,130,246,.16)!important}
 .adj-filled td{background:rgba(16,185,129,.18)!important}
 .adj-other{color:#6B7280}
-/* 混合组(一成交一撤销)里的撤销行整行文字橙色，用户2026-08-09定 */
-tr.adj-mixed-cancel td{color:#F97316}
+/* 混合组(一成交一撤销)里的撤销行整行文字 PANTONE 272C，用户2026-08-09定 */
+tr.adj-mixed-cancel td{color:#6566D8}
 /* 撤销单负号加粗 */
 .oc-neg{font-weight:700}
 /* 已成交列拆"开/平"两小格 */
@@ -2242,7 +2242,7 @@ function adjRow(r, showInst) {
     const filledTxt = `<span class="oc">开 ${ocFmt(openS)}</span><span class="oc oc2">平 ${ocFmt(closeS)}</span>`;
     // 行背景：按整组判定统一上色（组内任一成交→整组绿；双向全撤→整组蓝）
     const rowCls = groupFilled ? 'adj-filled' : 'adj-canceled';
-    // 混合组里的撤销行：整行文字橙色（区分成交/撤销），用户2026-08-09定
+    // 混合组里的撤销行：整行文字 PANTONE 272C，用户2026-08-09定
     const mixedCls = (mixed && !dFilled) ? ' adj-mixed-cancel' : '';
     return `<tr class="${rowCls}${mixedCls}">${seqTd}${inst}${timeTd}${typeTd}<td>${dir}</td>` +
            `<td class="num">${(d.px || 0).toFixed(4)}</td><td class="num">${filledTxt}</td>` +
