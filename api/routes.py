@@ -1604,23 +1604,14 @@ def register_routes(app: FastAPI):
                 hist = cli.get_order_history(getattr(st, "inst_id", ""), limit=100)
             except Exception:
                 hist = []
-            seen = set(getattr(st, "adjust_seen_ord_ids", []))
-            new_orders = [o for o in hist if o.get("ordId") and o.get("ordId") not in seen]
-            if new_orders:
-                for g in _group_orders(new_orders):
-                    gtype = _classify_group(g)
-                    for o in g:
-                        if o.get("ordId"):
-                            getattr(st, "adjust_seen_ord_ids", []).append(o.get("ordId"))
-                    if gtype != "build":
-                        getattr(st, "adjust_records", []).append(_build_record(g, gtype))
-                st.adjust_records = getattr(st, "adjust_records", [])[-300:]
-                st.adjust_seen_ord_ids = getattr(st, "adjust_seen_ord_ids", [])[-2000:]
-                if save_state is not None:
-                    try:
-                        save_state()
-                    except Exception:
-                        pass
+            # 方案B：全量按cTime窗口重建记录（幂等/自愈；分批成交时张数与手续费每轮重算跟最新）
+            records = []
+            for g in _group_orders(hist or []):
+                gtype = _classify_group(g)
+                if gtype == "build":
+                    continue
+                records.append(_build_record(g, gtype))
+            st.adjust_records = records[-300:]
         return {"status": "ok", "data": _serialize_adjust(st)}
 
     return app
