@@ -42,6 +42,19 @@ def _grid_step_contracts(st) -> int:
     return max(int(total * ratio / 2), 1)
 
 
+def _notify_trade(st, desc, side):
+    """成交后推送(平多/开空 或 平空/开多)。只读, 异常不影响交易。"""
+    try:
+        from notify import on_trade
+        pos = st.position
+        px = getattr(st, f"grid_{side}_px", 0) or 0
+        n = _grid_step_contracts(st)
+        on_trade(desc, n, round(px, 2), round(st.total_equity or 0, 2),
+                 pos.long_contracts, pos.short_contracts)
+    except Exception as e:
+        logger.debug(f"notify_trade: {e}")
+
+
 def _mode_base_density(st) -> float:
     """模式base密度：进攻=base_density，防守=defense_density（文档§5.1）。"""
     if getattr(st, "mode", "attack") == "defense":
@@ -162,6 +175,15 @@ def calc_grid_levels(st) -> tuple[float, float]:
         upl_pct = _heavy_upl_pct(st, heavy)
         heavy_state = _debounce_upl_state(st, heavy, upl_pct)
         emergency = _is_emergency(st, imbalance, heavy_state)
+        was_em = getattr(st, "emergency_state", False)
+        if emergency and not was_em:
+            # 失衡率过高 → 启动单边防御(只挂平重仓侧)，推送
+            try:
+                from notify import on_imbalance
+                on_imbalance(round(imbalance, 1),
+                             float(getattr(st, "one_way_threshold", 60.0) or 60.0), heavy)
+            except Exception as e:
+                logger.debug(f"notify_imbalance: {e}")
         if emergency:
             density = min(_mode_base_density(st), _ladder_density(st, imbalance))
         else:
@@ -399,6 +421,7 @@ def check_grid_tick(st) -> None:
             )
             return
         _log(st, f"🔺 上端成交(平多+开空) → 撤下端, 重挂", cat="GRID")
+        _notify_trade(st, "平多/开空", "upper")
         if lo:
             _cancel_orders(st, [oid for oid in lo if oid in pending_ids])
         st.grid_upper_ord_ids = []
@@ -417,6 +440,7 @@ def check_grid_tick(st) -> None:
             )
             return
         _log(st, f"🔻 下端成交(平空+开多) → 撤上端, 重挂", cat="GRID")
+        _notify_trade(st, "平空/开多", "lower")
         if up:
             _cancel_orders(st, [oid for oid in up if oid in pending_ids])
         st.grid_upper_ord_ids = []

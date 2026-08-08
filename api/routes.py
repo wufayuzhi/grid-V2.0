@@ -1131,7 +1131,14 @@ def register_routes(app: FastAPI):
         contracts = int(req.get("contracts", 0))
         try:
             from engine.build import execute_start_grid
-            return execute_start_grid(contracts=contracts)
+            r = execute_start_grid(contracts=contracts)
+            if r.get("status") == "ok":
+                try:
+                    from notify import on_op
+                    on_op("🔨 建仓/启动", f"{contracts}张")
+                except Exception:
+                    pass
+            return r
         except Exception as e:
             return {"status": "error", "msg": f"建仓失败: {e}"}
 
@@ -1148,6 +1155,11 @@ def register_routes(app: FastAPI):
     async def stop_grid():
         get_state().running = False
         _add_log(get_state(), "⏹ 网格已暂停")
+        try:
+            from notify import on_status
+            on_status("⏹ 网格已停止")
+        except Exception:
+            pass
         return {"status": "ok"}
 
     @app.post("/api/v1/grid/flat")
@@ -1157,6 +1169,11 @@ def register_routes(app: FastAPI):
         try:
             from engine.flat import execute_emergency
             await asyncio.to_thread(execute_emergency, st, "手动全平")
+            try:
+                from notify import on_op
+                on_op("💥 全平(手动)")
+            except Exception:
+                pass
         except Exception as e:
             return {"status": "error", "msg": f"全平失败: {e}"}
         return {"status": "ok"}
@@ -1165,7 +1182,14 @@ def register_routes(app: FastAPI):
     async def hedge_grid():
         try:
             from engine.hedge import execute_hedge
-            return execute_hedge()
+            r = execute_hedge()
+            if r.get("status") == "ok":
+                try:
+                    from notify import on_op
+                    on_op("🔒 对锁")
+                except Exception:
+                    pass
+            return r
         except Exception as e:
             return {"status": "error", "msg": f"对锁失败: {e}"}
 

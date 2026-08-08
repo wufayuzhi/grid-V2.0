@@ -190,6 +190,13 @@ def _check_cumulative_drawdown(st) -> bool:
                        "latest_upl": round(latest_upl, 2)})
             _full_flat(st, "累计回撤熔断", block_rebuild=True)
             return True
+        elif dd > 0.7 * st.cumulative_drawdown_threshold:
+            try:
+                from notify import on_risk_close
+                on_risk_close(f"回撤{dd:.2f}% 接近{st.cumulative_drawdown_threshold:.1f}%累计线",
+                              round(st.total_equity or 0, 2))
+            except Exception:
+                pass
     except Exception as e:
         logger.debug(f"cumulative_drawdown: {e}")
     return False
@@ -217,6 +224,13 @@ def _check_safety_flat(st) -> bool:
                        "threshold": st.safety_flat_threshold})
             _full_flat(st, "安全距离兜底", block_rebuild=True)
             return True
+        elif sd < 1.3 * st.safety_flat_threshold:
+            try:
+                from notify import on_risk_close
+                on_risk_close(f"安全距离{sd:.2f}% 接近{st.safety_flat_threshold:.1f}%平仓线",
+                              round(st.total_equity or 0, 2))
+            except Exception:
+                pass
     except Exception as e:
         logger.debug(f"safety_flat: {e}")
     return False
@@ -252,8 +266,21 @@ def _check_bleed_melt(st) -> bool:
         if dd > st.bleed_threshold_pct:
             _log(st, f"🩸 [失血] 权益回撤 {dd:.2f}% > 阈值{st.bleed_threshold_pct:.1f}% → 熔断",
                  level="WARN", cat="RISK", data={"drawdown_pct": round(dd, 2)})
+            try:
+                from notify import on_bleed
+                on_bleed(f"{dd:.2f}%/窗", round(st.total_equity or 0, 2))
+            except Exception:
+                pass
             _full_flat(st, "失血熔断", block_rebuild=True)
             return True
+        elif dd > 0.7 * st.bleed_threshold_pct:
+            # 接近失血熔断线预警
+            try:
+                from notify import on_risk_close
+                on_risk_close(f"回撤{dd:.2f}% 接近{st.bleed_threshold_pct:.1f}%失血线",
+                              round(st.total_equity or 0, 2))
+            except Exception:
+                pass
     except Exception as e:
         logger.debug(f"bleed_melt: {e}")
     return False
