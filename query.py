@@ -7,11 +7,16 @@ grid-V2.0 私聊只读查询模组
 凭证: OPENROUTER_API_KEY (来自 .env.wecom, 不入库)
 """
 import json, os, urllib.request, urllib.parse
+import wecom_config  # 前端可配置的企微通知配置（APIKEY/模型热加载）
 
 API_BASE = os.environ.get("GRID_API", "http://localhost:8001")
-MODEL = os.environ.get("WECOM_QUERY_MODEL", "openai/gpt-oss-20b:free")
-OR_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OR_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+def _model():
+    return wecom_config.get_value("wecom_query_model") or "openai/gpt-oss-20b:free"
+
+def _or_key():
+    return wecom_config.get_value("openrouter_api_key")
 
 def _fetch(endpoint):
     """只读 GET 本地 grid API"""
@@ -63,13 +68,13 @@ SYSTEM = (
 )
 
 def _or_chat(messages, tools=None):
-    body = {"model": MODEL, "messages": messages, "max_tokens": 500}
+    body = {"model": _model(), "messages": messages, "max_tokens": 500}
     if tools:
         body["tools"] = tools
         body["tool_choice"] = "auto"
     data = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(OR_URL, data=data, headers={
-        "Authorization": f"Bearer {OR_KEY}", "Content-Type": "application/json"})
+        "Authorization": f"Bearer {_or_key()}", "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             return json.load(r)
@@ -78,7 +83,7 @@ def _or_chat(messages, tools=None):
 
 def answer(user_text):
     """自然语言 → 只读工具调用循环 → 中文回答"""
-    if not OR_KEY:
+    if not _or_key():
         return "❌ 查询模组未配置 OPENROUTER_API_KEY"
     messages = [{"role": "system", "content": SYSTEM},
                 {"role": "user", "content": user_text}]

@@ -557,6 +557,64 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
   </div>
 </div>
 
+<!-- 💬 企微通知配置弹窗 -->
+<div class="modal-overlay" id="wecom-config-modal" onclick="if(event.target===this)return">
+  <div class="modal-box" style="max-width:640px;border-radius:16px;padding:22px 24px">
+    <div class="mh" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:22px">💬</span>
+        <span style="font-size:16px;font-weight:700;background:linear-gradient(135deg,#3B82F6,#8B5CF6);-webkit-background-clip:text;-webkit-text-fill-color:transparent">企微通知配置</span>
+      </div>
+      <button onclick="closeWecomConfigModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--t2)">×</button>
+    </div>
+    <div style="font-size:11px;color:var(--t3);margin-bottom:14px">配置企业微信通知。群推送=交易通知广播到群；长链接=私聊查询机器人；大模型=AI 回答用。保存后即时生效，长链接凭据变更后约 15 秒自动重连。凭证仅存本机，前端不回显明文。</div>
+
+    <!-- 群推送 webhook -->
+    <div style="border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px;background:var(--card)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <b style="font-size:13px">📣 群推送链接（webhook）</b>
+        <span id="wc-webhook-state" style="font-size:11px;color:var(--t2);font-weight:600"></span>
+      </div>
+      <input type="text" id="wc-webhook-url" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..." autocomplete="off" style="width:100%;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;font-size:12px;background:var(--card2);outline:none;box-sizing:border-box;font-family:monospace">
+      <div style="margin-top:8px;text-align:right"><button class="btn" onclick="testWecom('webhook')" style="font-size:11px;padding:4px 12px">🔌 测试</button></div>
+    </div>
+
+    <!-- 长链接 -->
+    <div style="border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px;background:var(--card)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <b style="font-size:13px">💬 企业微信长链接（私聊查询）</b>
+        <span id="wc-longlink-state" style="font-size:11px;color:var(--t2);font-weight:600"></span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="wc-bot-id" placeholder="Bot ID" autocomplete="off" style="flex:1;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;font-size:12px;background:var(--card2);outline:none;box-sizing:border-box;font-family:monospace">
+        <input type="password" id="wc-bot-secret" placeholder="Secret" autocomplete="off" style="flex:1;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;font-size:12px;background:var(--card2);outline:none;box-sizing:border-box;font-family:monospace">
+      </div>
+      <div style="margin-top:8px;text-align:right"><button class="btn" onclick="testWecom('longlink')" style="font-size:11px;padding:4px 12px">🔌 测试</button></div>
+    </div>
+
+    <!-- 大模型 -->
+    <div style="border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px;background:var(--card)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <b style="font-size:13px">🧠 大模型 APIKEY（AI 回答）</b>
+        <span id="wc-llm-state" style="font-size:11px;color:var(--t2);font-weight:600"></span>
+      </div>
+      <input type="password" id="wc-or-key" placeholder="OpenRouter API Key" autocomplete="off" style="width:100%;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;font-size:12px;background:var(--card2);outline:none;box-sizing:border-box;font-family:monospace;margin-bottom:8px">
+      <select id="wc-model" style="width:100%;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;font-size:12px;background:var(--card2);outline:none;box-sizing:border-box;color:var(--text)">
+        <option value="openai/gpt-oss-20b:free">openai/gpt-oss-20b:free</option>
+        <option value="google/gemma-4-26b-a4b-it:free">google/gemma-4-26b-a4b-it:free</option>
+        <option value="google/gemma-4-31b-it:free">google/gemma-4-31b-it:free</option>
+      </select>
+      <div style="margin-top:8px;text-align:right"><button class="btn" onclick="testWecom('llm')" style="font-size:11px;padding:4px 12px">🔌 测试</button></div>
+    </div>
+
+    <div id="wc-msg" style="font-size:12px;color:var(--t2);margin-bottom:10px;min-height:16px"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="pm-cancel" onclick="closeWecomConfigModal()" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--card2);cursor:pointer;font-size:13px;color:var(--t2);font-weight:600">取消</button>
+      <button class="pm-ok" onclick="saveWecomConfig()" style="flex:1;padding:10px;border-radius:10px;border:none;background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;cursor:pointer;font-size:13px;font-weight:700;box-shadow:0 2px 8px rgba(59,130,246,.3)">💾 保存</button>
+    </div>
+  </div>
+</div>
+
 <div class="app">
 
 <!-- ═══════ LAYER 1: TOP BAR ═══════ -->
@@ -572,6 +630,7 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
     <span>实盘</span><span id="sim-sw" class="sw"></span><span>模拟</span>
   </div>
   <button class="btn api" onclick="openApiModal()" title="API密钥设置" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,var(--purple),#7C3AED);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(124,58,237,.3);transition:all .2s"><span style="font-size:14px">🔑</span> API <span id="api-masked-tag" style="font-size:11px;font-weight:400;opacity:.9"></span></button>
+  <button class="btn api" onclick="openWecomConfigModal()" title="企微通知配置" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(59,130,246,.3);transition:all .2s"><span style="font-size:14px">💬</span> 通知</button>
   <button class="btn log" onclick="showLog()">📋 日志</button>
   <span id="badge-run" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--t2);font-weight:600"><span id="badge-run-dot" style="width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--red);box-shadow:0 0 6px var(--red)"></span><span id="badge-run-txt">停止</span></span>
 </div>
@@ -2336,6 +2395,58 @@ function openApiModal() {
 }
 function closeApiModal() {
   document.getElementById('api-modal').classList.remove('show');
+}
+// ── 企微通知配置弹窗 ──
+function openWecomConfigModal() {
+  document.getElementById('wecom-config-modal').classList.add('show');
+  document.getElementById('wc-msg').textContent = '';
+  fetch(API_BASE + '/api/v1/wecom/config').then(r => r.json()).then(d => {
+    if (d.status === 'ok' && d.data) {
+      const s = d.data;
+      document.getElementById('wc-bot-id').value = s.wecom_bot_id || '';
+      document.getElementById('wc-bot-secret').value = '';
+      document.getElementById('wc-bot-secret').placeholder = s.wecom_bot_secret_has ? ('已设置 ' + (s.wecom_bot_secret_masked || '****')) : 'Secret';
+      document.getElementById('wc-webhook-url').value = '';
+      document.getElementById('wc-webhook-url').placeholder = s.wecom_webhook_url_has ? ('已设置 ' + (s.wecom_webhook_url_masked || '****')) : 'webhook URL';
+      document.getElementById('wc-or-key').value = '';
+      document.getElementById('wc-or-key').placeholder = s.openrouter_api_key_has ? ('已设置 ' + (s.openrouter_api_key_masked || '****')) : 'OpenRouter API Key';
+      document.getElementById('wc-longlink-state').textContent = s.wecom_bot_id ? '✅ 已配置' : '未配置';
+      document.getElementById('wc-webhook-state').textContent = s.wecom_webhook_url_has ? '✅ 已配置' : '未配置';
+      document.getElementById('wc-llm-state').textContent = s.openrouter_api_key_has ? '✅ 已配置' : '未配置';
+      const sel = document.getElementById('wc-model');
+      if (s.wecom_query_model && !Array.from(sel.options).some(o => o.value === s.wecom_query_model)) {
+        const o = document.createElement('option'); o.value = s.wecom_query_model; o.textContent = s.wecom_query_model; sel.appendChild(o);
+      }
+      sel.value = s.wecom_query_model || 'openai/gpt-oss-20b:free';
+    }
+  }).catch(e => { document.getElementById('wc-msg').textContent = '加载配置失败: ' + e; });
+}
+function closeWecomConfigModal() {
+  document.getElementById('wecom-config-modal').classList.remove('show');
+}
+function saveWecomConfig() {
+  const payload = {
+    wecom_bot_id: document.getElementById('wc-bot-id').value.trim(),
+    wecom_bot_secret: document.getElementById('wc-bot-secret').value.trim(),
+    wecom_webhook_url: document.getElementById('wc-webhook-url').value.trim(),
+    openrouter_api_key: document.getElementById('wc-or-key').value.trim(),
+    wecom_query_model: document.getElementById('wc-model').value
+  };
+  fetch(API_BASE + '/api/v1/wecom/config', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+  }).then(r => r.json()).then(d => {
+    if (d.status === 'ok') { closeWecomConfigModal(); alert('✅ 企微通知配置已保存'); }
+    else { document.getElementById('wc-msg').textContent = '❌ ' + (d.msg || '保存失败'); }
+  }).catch(e => { document.getElementById('wc-msg').textContent = '保存失败: ' + e; });
+}
+function testWecom(kind) {
+  document.getElementById('wc-msg').textContent = '测试中...';
+  fetch(API_BASE + '/api/v1/wecom/test', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind })
+  }).then(r => r.json()).then(d => {
+    const txt = d.status === 'ok' ? (d.msg || d.resp || 'OK') : ('❌ ' + (d.msg || '失败'));
+    document.getElementById('wc-msg').textContent = (d.status === 'ok' ? '✅ ' : '') + txt;
+  }).catch(e => { document.getElementById('wc-msg').textContent = '测试失败: ' + e; });
 }
 function saveApiKeyModal() {
   const apikey = document.getElementById('api-key-input').value.trim();

@@ -6,13 +6,15 @@ grid-V2.0 群 webhook 常规推送
 凭证: WECOM_WEBHOOK_URL (env 或 .env.wecom 文件, 不入库)
 """
 import json, os, time, urllib.request
+import wecom_config  # 前端可配置的企微通知配置
 
 _ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.wecom")
 
 def _load_webhook_url():
-    url = os.environ.get("WECOM_WEBHOOK_URL", "")
-    if url:
-        return url
+    """优先前端配置(wecom_config.json)，fallback 环境变量，再 fallback .env.wecom 文件"""
+    v = wecom_config.get_value("wecom_webhook_url")
+    if v:
+        return v
     try:
         with open(_ENV_PATH) as f:
             for line in f:
@@ -22,8 +24,6 @@ def _load_webhook_url():
     except Exception:
         pass
     return ""
-
-WEBHOOK_URL = _load_webhook_url()
 
 # 同类事件最小间隔(秒): trade成交/imbalance失衡/risk风控/bleed失血/op操作/status启停
 _MIN_INTERVAL = {"trade": 10, "imbalance": 60, "risk": 30, "bleed": 15, "op": 5, "status": 5}
@@ -37,10 +37,11 @@ def _throttle(cat):
     return False
 
 def _post(md):
-    if not WEBHOOK_URL:
+    url = _load_webhook_url()  # 每次发送热读配置，前端修改立即生效
+    if not url:
         return "no-webhook-url"
     payload = json.dumps({"msgtype": "markdown", "markdown": {"content": md}}).encode("utf-8")
-    req = urllib.request.Request(WEBHOOK_URL, data=payload,
+    req = urllib.request.Request(url, data=payload,
                                  headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=5) as r:

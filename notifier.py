@@ -17,10 +17,12 @@ except ImportError:
     sys.exit(1)
 
 import query  # 私聊只读查询模组
+import wecom_config  # 前端可配置的企微通知配置
 
 WS_URL = "wss://openws.work.weixin.qq.com"
-BOT_ID = os.environ.get("WECOM_BOT_ID", "")
-SECRET = os.environ.get("WECOM_BOT_SECRET", "")
+# 凭证优先读前端可配置的 wecom_config.json，fallback 环境变量
+BOT_ID = wecom_config.get_value("wecom_bot_id")
+SECRET = wecom_config.get_value("wecom_bot_secret")
 SESSION_FILE = os.environ.get("WECOM_SESSION_FILE", "/app/data/wecom_session.json")  # 记住会话
 LOG_FILE = os.environ.get("WECOM_LOG_FILE", "/app/data/wecom_link.log")  # 原始消息日志
 
@@ -125,12 +127,32 @@ async def heartbeat(ws):
         except Exception as e:
             log(f"心跳失败: {e}")
 
+async def _watch_reload(ws):
+    """监控前端配置里的长链接凭证变化，变了就断开重连（用新凭证订阅）。"""
+    global BOT_ID, SECRET
+    while True:
+        await asyncio.sleep(15)
+        nb = wecom_config.get_value("wecom_bot_id")
+        ns = wecom_config.get_value("wecom_bot_secret")
+        if nb != BOT_ID or ns != SECRET:
+            log(f"检测到长链接凭证变化 ({BOT_ID[:4] or '空'}→{nb[:4] or '空'})，触发重连")
+            try:
+                await ws.close()
+            except Exception:
+                pass
+            return
+
 async def run():
-    if not BOT_ID or not SECRET:
-        log("❌ 缺少 WECOM_BOT_ID / WECOM_BOT_SECRET")
-        return
+    global BOT_ID, SECRET
     while True:
         try:
+            # 每次连接前重新读配置（支持前端热更新）
+            BOT_ID = wecom_config.get_value("wecom_bot_id")
+            SECRET = wecom_config.get_value("wecom_bot_secret")
+            if not BOT_ID or not SECRET:
+                log("❌ 缺少长链接凭证（请在前端设置页配置或设置 WECOM_BOT_ID/SECRET），5 秒后重试")
+                await asyncio.sleep(5)
+                continue
             log(f"连接长链接 {WS_URL} ...")
             async with websockets.connect(WS_URL, ping_interval=None, max_size=8*1024*1024) as ws:
                 _state["connected"] = False
@@ -139,6 +161,7 @@ async def run():
                        "body": {"bot_id": BOT_ID, "secret": SECRET}}
                 await ws.send(json.dumps(sub))
                 hb = asyncio.create_task(heartbeat(ws))
+                reloader = asyncio.create_task(_watch_reload(ws))
                 async for raw in ws:
                     reply = handle_frame(raw)
                     if reply:
@@ -147,6 +170,7 @@ async def run():
                         except Exception as e:
                             log(f"回复失败: {e}")
                 hb.cancel()
+                reloader.cancel()
         except asyncio.CancelledError:
             log("已停止")
             return

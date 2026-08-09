@@ -31,6 +31,8 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
+import wecom_config  # 前端可配置的企微通知配置
+
 logger = logging.getLogger(__name__)
 
 # ══════════════════════════════════════════════════════════════════
@@ -1613,5 +1615,55 @@ def register_routes(app: FastAPI):
                 records.append(_build_record(g, gtype))
             st.adjust_records = records[-300:]
         return {"status": "ok", "data": _serialize_adjust(st)}
+
+    # ═══ 企微通知配置（前端可配置：长链接/群推送/大模型）═══
+    @app.get("/api/v1/wecom/config")
+    async def wecom_config_get():
+        try:
+            return {"status": "ok", "data": wecom_config.get_public_status()}
+        except Exception as e:
+            return {"status": "error", "msg": str(e)}
+
+    @app.post("/api/v1/wecom/config")
+    async def wecom_config_post(payload: dict):
+        try:
+            cfg = wecom_config.save_config(payload)
+            return {"status": "ok", "data": wecom_config.get_public_status()}
+        except Exception as e:
+            return {"status": "error", "msg": str(e)}
+
+    @app.post("/api/v1/wecom/test")
+    async def wecom_config_test(payload: dict = None):
+        import urllib.request
+        kind = (payload or {}).get("kind", "webhook")
+        try:
+            if kind == "webhook":
+                url = wecom_config.get_value("wecom_webhook_url")
+                if not url:
+                    return {"status": "error", "msg": "未配置群推送 webhook URL"}
+                req = urllib.request.Request(url, data=json.dumps(
+                    {"msgtype": "markdown", "markdown": {"content": "✅ grid-V2.0 配置测试成功"}}).encode("utf-8"),
+                    headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=5) as r:
+                    return {"status": "ok", "resp": r.read().decode("utf-8", "ignore")[:200]}
+            elif kind == "llm":
+                key = wecom_config.get_value("openrouter_api_key")
+                model = wecom_config.get_value("wecom_query_model")
+                if not key:
+                    return {"status": "error", "msg": "未配置大模型 APIKEY"}
+                req = urllib.request.Request("https://openrouter.ai/api/v1/chat/completions",
+                    data=json.dumps({"model": model, "messages": [{"role": "user", "content": "hi"}], "max_tokens": 5}).encode("utf-8"),
+                    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    return {"status": "ok", "resp": r.read().decode("utf-8", "ignore")[:200]}
+            elif kind == "longlink":
+                bot = wecom_config.get_value("wecom_bot_id")
+                sec = wecom_config.get_value("wecom_bot_secret")
+                return {"status": "ok",
+                        "msg": ("已配置长链接，凭据变更后 notifier 约 15 秒内自动重连" if bot and sec else "未配置长链接"),
+                        "bot_id_has": bool(bot), "secret_has": bool(sec)}
+            return {"status": "error", "msg": f"未知测试类型 {kind}"}
+        except Exception as e:
+            return {"status": "error", "msg": str(e)}
 
     return app
