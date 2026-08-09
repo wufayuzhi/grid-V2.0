@@ -607,6 +607,7 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
       <div style="margin-top:8px;text-align:right"><button class="btn" onclick="testWecom('llm')" style="font-size:11px;padding:4px 12px">🔌 测试</button></div>
     </div>
 
+    <div id="wc-masked-preview" style="font-size:12px;color:var(--t2);background:#F6F5FB;border:1px dashed var(--bd);border-radius:10px;padding:10px 12px;margin-bottom:10px;display:none"></div>
     <div id="wc-msg" style="font-size:12px;color:var(--t2);margin-bottom:10px;min-height:16px"></div>
     <div style="display:flex;gap:10px;justify-content:flex-end">
       <button class="pm-cancel" onclick="closeWecomConfigModal()" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--card2);cursor:pointer;font-size:13px;color:var(--t2);font-weight:600">取消</button>
@@ -630,7 +631,7 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
     <span>实盘</span><span id="sim-sw" class="sw"></span><span>模拟</span>
   </div>
   <button class="btn api" onclick="openApiModal()" title="API密钥设置" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,var(--purple),#7C3AED);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(124,58,237,.3);transition:all .2s"><span style="font-size:14px">🔑</span> API <span id="api-masked-tag" style="font-size:11px;font-weight:400;opacity:.9"></span></button>
-  <button class="btn api" onclick="openWecomConfigModal()" title="企微通知配置" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(59,130,246,.3);transition:all .2s"><span style="font-size:14px">💬</span> 通知</button>
+  <button class="btn api" onclick="openWecomConfigModal()" title="企微通知配置" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(59,130,246,.3);transition:all .2s"><span style="font-size:14px">💬</span> 通知 <span id="wc-masked-tag" style="font-size:11px;font-weight:400;opacity:.9"></span></button>
   <button class="btn log" onclick="showLog()">📋 日志</button>
   <span id="badge-run" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--t2);font-weight:600"><span id="badge-run-dot" style="width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--red);box-shadow:0 0 6px var(--red)"></span><span id="badge-run-txt">停止</span></span>
 </div>
@@ -1695,6 +1696,7 @@ async function refresh() {
     // ── 状态灯 + 参数值（基础账户卡 2×2）──
     updateStatusLights(p, S);
     updateApiMaskedTag();
+    updateWcMaskedTag();
 
     // ── L6: Sliders one-time sync from server ──
     if (!_slidersSynced) {
@@ -2418,6 +2420,14 @@ function openWecomConfigModal() {
         const o = document.createElement('option'); o.value = s.wecom_query_model; o.textContent = s.wecom_query_model; sel.appendChild(o);
       }
       sel.value = s.wecom_query_model || 'openai/gpt-oss-20b:free';
+      // 脱敏预览区（与交易所 APIKey 一致，只显示脱敏值）
+      const pm = document.getElementById('wc-masked-preview');
+      const rows = [];
+      if (s.wecom_bot_id) rows.push('<b>长链接:</b> ' + (s.wecom_bot_secret_masked || '已配置'));
+      if (s.wecom_webhook_url_has) rows.push('<b>群推送:</b> ' + (s.wecom_webhook_url_masked || '已配置'));
+      if (s.openrouter_api_key_has) rows.push('<b>大模型:</b> ' + (s.openrouter_api_key_masked || '已配置'));
+      if (rows.length) { pm.innerHTML = rows.join(' &nbsp; '); pm.style.display = 'block'; }
+      else { pm.style.display = 'none'; }
     }
   }).catch(e => { document.getElementById('wc-msg').textContent = '加载配置失败: ' + e; });
 }
@@ -2435,7 +2445,7 @@ function saveWecomConfig() {
   fetch(API_BASE + '/api/v1/wecom/config', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
   }).then(r => r.json()).then(d => {
-    if (d.status === 'ok') { closeWecomConfigModal(); alert('✅ 企微通知配置已保存'); }
+    if (d.status === 'ok') { closeWecomConfigModal(); updateWcMaskedTag(); alert('✅ 企微通知配置已保存'); }
     else { document.getElementById('wc-msg').textContent = '❌ ' + (d.msg || '保存失败'); }
   }).catch(e => { document.getElementById('wc-msg').textContent = '保存失败: ' + e; });
 }
@@ -2480,6 +2490,17 @@ function updateApiMaskedTag() {
       tag.textContent = '';
     }
   });
+}
+function updateWcMaskedTag() {
+  fetch(API_BASE + '/api/v1/wecom/config').then(r => r.json()).then(d => {
+    const tag = document.getElementById('wc-masked-tag');
+    const s = d && d.data;
+    if (!s) { if (tag) tag.textContent = ''; return; }
+    const web = s.wecom_webhook_url_masked || (s.wecom_webhook_url_has ? '已配置' : '');
+    const bot = s.wecom_bot_secret_masked || (s.wecom_bot_id ? '已配置' : '');
+    const llm = s.openrouter_api_key_masked || (s.openrouter_api_key_has ? '已配置' : '');
+    if (tag) tag.textContent = [web && ('📣' + web), bot && ('💬' + bot), llm && ('🧠' + llm)].filter(Boolean).join(' ');
+  }).catch(() => { const tag = document.getElementById('wc-masked-tag'); if (tag) tag.textContent = ''; });
 }
 function fetchApiMasked() {
   return fetch(API_BASE + '/api/v1/config/apikey')
