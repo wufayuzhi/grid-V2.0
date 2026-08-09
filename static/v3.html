@@ -1348,10 +1348,24 @@ function initChart() {  const el = document.getElementById('chart-container');  
   window.addEventListener('resize', () => chart.resize(el.clientWidth || 800, 420));
 }
 
+let lastChartKey = '';          // 上次K线的 币种:时段 标识
+let lastKlineData = null;       // 上次K线数据（增量更新用）
+
+// 增量更新：只 update 变化/新增的 bar，保留用户拖动/缩放视图
+function diffKlineUpdate(oldData, newData) {
+  const n = newData.length, m = oldData.length;
+  let start;
+  if (n >= m) start = m - 1;   // 旧数据最后一根可能在变 + 其后全是新增
+  else        start = n - 1;   // 新数据更短（异常兜底）
+  if (start < 0) start = 0;
+  for (let i = start; i < n; i++) series.update(newData[i]);
+}
+
 async function loadChartData(bar, fit) {
   if (!series) return;
   const tf = bar || '15m';
   const doFit = fit !== false;   // 默认 true；5秒定时器传 false 保持用户视图
+  const key = (S.inst_id || '') + ':' + tf;
   try {
     const r = await fetch(`${API_BASE}/api/v1/candles?inst_id=${S.inst_id}&bar=${tf}&limit=200`);
     const d = await r.json();
@@ -1360,8 +1374,18 @@ async function loadChartData(bar, fit) {
       time: c[0] / 1000,
       open: parseFloat(c[1]), high: parseFloat(c[2]), low: parseFloat(c[3]), close: parseFloat(c[4])
     })).reverse();
-    series.setData(data);
-    if (doFit) chart.timeScale().fitContent();
+    // 首次加载 / 切换币种或时段 → 全量 setData（此时才允许重置视图）
+    if (key !== lastChartKey || !lastKlineData) {
+      series.setData(data);
+      lastKlineData = data;
+      lastChartKey = key;
+      if (doFit) chart.timeScale().fitContent();
+      redrawLines();
+      return;
+    }
+    // 常规刷新 → 增量 update，保持用户拖动/缩放的视图位置
+    diffKlineUpdate(lastKlineData, data);
+    lastKlineData = data;
     redrawLines();
   } catch (e) { console.log('chart load:', e); }
 }
