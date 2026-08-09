@@ -65,7 +65,7 @@ class DiagnosticLogger:
         self._file_date = ""
         # 机制健康状态: {机制名: {started, last_heartbeat, ok, errors, last_error, info}}
         self._health: dict[str, dict] = {}
-        os.makedirs(log_dir, exist_ok=True)
+        os.makedirs(self.log_dir, exist_ok=True)
         self._cleanup_old_files()
 
     def _cleanup_old_files(self):
