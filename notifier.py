@@ -42,7 +42,7 @@ def next_req_id():
 def reply_via_url(response_url, content):
     """企业微信智能机器人官方回复机制：HTTP POST 到回调的 response_url"""
     import urllib.request
-    payload = json.dumps({"msgtype": "text", "text": {"content": content}}).encode("utf-8")
+    payload = json.dumps({"msgtype": "markdown", "markdown": {"content": content}}).encode("utf-8")
     req = urllib.request.Request(response_url, data=payload,
                                  headers={"Content-Type": "application/json"})
     try:
