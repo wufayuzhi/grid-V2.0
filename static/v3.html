@@ -1386,7 +1386,7 @@ async function loadChartData(bar, fit) {
     // 常规刷新 → 增量 update，保持用户拖动/缩放的视图位置
     diffKlineUpdate(lastKlineData, data);
     lastKlineData = data;
-    redrawLines();
+    redrawLines(false);   // 增量刷新不 fitContent，不重置用户视图
   } catch (e) { console.log('chart load:', e); }
 }
 
@@ -1451,7 +1451,7 @@ function calcSuperTrend(data, atr, mul) {
   return st;
 }
 
-function redrawLines() {
+function redrawLines(doFit) {
   if (!series || !lineSeries.st) return;
   const data = series.data();
   if (!data || !data.length) return;
@@ -1520,8 +1520,8 @@ function redrawLines() {
   lineSeries.ema2.applyOptions({ visible: showE2 });
 
   updateZoneReadout();
-  // 确保价格刻度不受指标线影响
-  chart.timeScale().fitContent();
+  // 确保价格刻度不受指标线影响（仅首次/切换/主动操作时 fit，增量刷新不重置用户视图）
+  if (doFit !== false) chart.timeScale().fitContent();
 }
 
 // K线控件栏参考值实时显示（止盈/熔断/爆表 金额）
