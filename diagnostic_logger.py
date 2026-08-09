@@ -56,8 +56,8 @@ class DiagnosticLogger:
     - 健康：各机制启动/心跳/错误状态聚合
     """
 
-    def __init__(self, log_dir: str = "/app/data/logs", max_mem: int = 2000):
-        self.log_dir = log_dir
+    def __init__(self, log_dir: str = "", max_mem: int = 2000):
+        self.log_dir = log_dir or os.environ.get("LOG_DIR", "/app/data/logs")
         self.max_mem = max_mem
         self._mem: deque[dict] = deque(maxlen=max_mem)
         self._lock = threading.Lock()
@@ -275,7 +275,7 @@ class DiagnosticLogger:
 _diag: DiagnosticLogger | None = None
 
 
-def get_diag_logger(log_dir: str = "/app/data/logs") -> DiagnosticLogger:
+def get_diag_logger(log_dir: str = "") -> DiagnosticLogger:
     global _diag
     if _diag is None:
         _diag = DiagnosticLogger(log_dir=log_dir)

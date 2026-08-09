@@ -17,9 +17,9 @@ __pycache__/
 venv/
 .pytest_cache/
 
-# 运行数据(由 volume 挂载,不进镜像)
-data/
-/app/data/
+# 运行数据(由 volume 挂载,不进镜像) — 注意:data/ 是Python代码包(含ticker.py),必须进镜像,不能排除!
+# 运行数据实际存 /app/data-run (volume),与代码包 /app/data 分离
+/app/data-run/
 
 # 部署/备份/临时
 docker-compose*.yml

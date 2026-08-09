@@ -19,7 +19,7 @@ services:
     environment:
       - PORT=8001
     volumes:
-      - grid-v2-data:/app/data
+      - grid-v2-data:/app/data-run
     ports:
       - "8001:8001"
     restart: unless-stopped
@@ -39,7 +39,7 @@ services:
     environment:
       - GRID_API=http://grid-v2-app:8001
     volumes:
-      - grid-v2-data:/app/data
+      - grid-v2-data:/app/data-run
     depends_on:
       - grid-v2-app
     restart: unless-stopped

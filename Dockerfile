@@ -8,11 +8,13 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends dnsutil
 # 时区设为香港（UTC+8），与交易所显示、K线图统一
 ENV TZ=Asia/Hong_Kong
 
-# 运行数据目录（状态/API密钥/日志持久化，与代码分离）
-ENV DATA_DIR=/app/data
-ENV V2_STATE_FILE=/app/data/v2_grid_state.json
-ENV LOG_DIR=/app/data/logs
-RUN mkdir -p /app/data/logs
+# 运行数据目录（状态/API密钥/日志持久化，与代码包 data/ 分离）
+ENV DATA_DIR=/app/data-run
+ENV V2_STATE_FILE=/app/data-run/v2_grid_state.json
+ENV LOG_DIR=/app/data-run/logs
+ENV WECOM_SESSION_FILE=/app/data-run/wecom_session.json
+ENV WECOM_LOG_FILE=/app/data-run/wecom_link.log
+RUN mkdir -p /app/data-run/logs
 
 # 安装 Python 依赖
 COPY requirements.txt .
