@@ -823,6 +823,7 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
       <button class="op-btn" id="op-hedge" onclick="dblTapConfirm('🔒 对锁（等量多空对冲）？', doHedge, this)"><span class="dot" id="op-hedge-dot"></span>🔒 对锁</button>
       <button class="op-btn" id="op-flat" onclick="dblTapConfirm('⚠️ 将全部平仓当前持仓？', doFlat, this)"><span class="dot" id="op-flat-dot"></span>💥 全平</button>
       <button class="op-btn" id="op-adj" onclick="dblTapConfirm('🔄 按当前失衡方向手动调平？', doManualAdj, this)"><span class="dot" id="op-adj-dot"></span>🔄 手动调平</button>
+      <button class="op-btn" id="op-recover" onclick="dblTapConfirm('🔁 从交易所认领现有挂单并无损恢复接管？', doRecover, this)"><span class="dot" id="op-recover-dot"></span>🔁 恢复接管</button>
     </div>
     <!-- 建仓/开始/停止 -->
     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">
@@ -2644,6 +2645,7 @@ async function cancelIce() { showOverlay('撤销冰山…'); await callPost(API_
 async function doHedge() { showOverlay('对锁中…'); await callPost(API_BASE + '/api/v1/grid/hedge'); hideOverlay(); }
 async function doFlat() { showOverlay('全平中…'); await callPost(API_BASE + '/api/v1/grid/flat'); hideOverlay(); }
 async function doManualAdj() { showOverlay('手动调平…'); await callPost(API_BASE + '/api/v1/grid/adjust'); hideOverlay(); }
+async function doRecover() { showOverlay('恢复接管中…'); await callPost(API_BASE + '/api/v1/grid/recover'); hideOverlay(); }
 
 // ── Add capital ──
 function addCapital() {
