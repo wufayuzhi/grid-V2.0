@@ -868,7 +868,7 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
     <div class="tc-title">📊 调平记录</div>
     <div id="adj-stats" class="adj-stats"></div>
     <div style="overflow-x:auto;width:100%"><table id="adj-tbl"><thead><tr><th>#</th><th>时间</th><th>类型</th><th>方向</th><th class="num">均价</th><th class="num">已成交</th><th class="num">价值</th><th class="num">手续费</th></tr></thead><tbody><tr><td colspan="8" style="text-align:center;color:var(--t3)">无数据</td></tr></tbody></table></div>
-    <div class="adj-footer"><button id="adj-expand" onclick="openAdjustModal()" style="display:none">展开全部</button></div>
+    <div class="adj-footer"><button id="adj-expand" onclick="openAdjustModal()">📋 全部调平记录</button></div>
   </div>
 </div>
 
@@ -2372,7 +2372,7 @@ function renderAdjust(data) {
   tbody.innerHTML = recs.length ? recs.map(r => adjRow(r, false)).join('')
     : '<tr><td colspan="7" style="text-align:center;color:var(--t3)">无数据</td></tr>';
   const btn = document.getElementById('adj-expand');
-  if (btn) { btn.style.display = (data.total || 0) > 3 ? '' : 'none'; btn.textContent = '展开全部 (' + (data.total || 0) + '组)'; }
+  if (btn) { btn.style.display = ''; btn.textContent = '📋 全部调平记录 (' + (data.total || 0) + '组)'; }
   window._adjustAll = { records: data.records || [], stats: data.stats || {} };
 }
 function openAdjustModal() {

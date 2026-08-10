@@ -273,19 +273,28 @@ def _get_client():
 # ══════════════════════════════════════════════════════════════════
 
 def _classify_group(orders):
-    """判定一组订单类型。orders: 同一调平动作的一笔或两笔"""
+    """判定一组订单类型。orders: 同一调平动作的一笔或两笔
+
+    规则（用户2026-08-11确认）：
+      - 成对意图优先：平多开空 / 平空开多（组内部分撤销仍按意图归类，前端逐单拆成交/撤销）
+      - 整组全部撤销 → canceled；shrink 须有真实成交，避免把拆散的 reduceOnly 虚算成纯缩仓
+    """
     sides = {(o.get("side"), o.get("posSide"), o.get("reduceOnly", "false")) for o in orders}
-    states = {o.get("state") for o in orders}
-    if "canceled" in states:
+    all_canceled = all(o.get("state") == "canceled" for o in orders)
+    any_filled = any(
+        o.get("state") in ("filled", "partially_filled") or _to_f(o.get("accFillSz")) > 0
+        for o in orders)
+    # 成对意图：平多+开空 / 平空+开多（含部分撤销也按意图，不整组降级为撤销）
+    if {("sell", "long", "true"), ("sell", "short", "false")} <= sides:
+        return "pingduo_kaikong"
+    if {("buy", "short", "true"), ("buy", "long", "false")} <= sides:
+        return "pingkong_kaiduo"
+    if all_canceled:
         return "canceled"
+    if orders and all(o.get("reduceOnly", "false") == "true" for o in orders) and any_filled:
+        return "shrink"
     if ("buy", "long", "false") in sides and ("sell", "short", "false") in sides:
         return "build"
-    if ("sell", "short", "false") in sides and ("sell", "long", "true") in sides:
-        return "pingduo_kaikong"
-    if ("buy", "long", "false") in sides and ("buy", "short", "true") in sides:
-        return "pingkong_kaiduo"
-    if orders and all(o.get("reduceOnly", "false") == "true" for o in orders):
-        return "shrink"
     return "other"
 
 
