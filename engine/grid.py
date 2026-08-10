@@ -148,8 +148,19 @@ def backfill_grid_stats(st) -> None:
         if not orders:
             return
         # ① 倒序追踪持仓，找最近一次"持仓归零"时刻(旧轮次结束)
-        cur_long = int(getattr(st.position, "long_contracts", 0) or 0)
-        cur_short = int(getattr(st.position, "short_contracts", 0) or 0)
+        # 当前持仓用交易所真实值(引擎内存 st.position 可能不同步 → 会找偏归零点)
+        cur_long, cur_short = 0, 0
+        try:
+            pos = client._request("GET", "/api/v5/account/positions",
+                                  params={"instType": "SWAP", "instId": inst})
+            for _p in (pos.get("data", []) if isinstance(pos, dict) else pos):
+                if _p.get("posSide") == "long":
+                    cur_long = int(float(_p.get("pos") or 0))
+                elif _p.get("posSide") == "short":
+                    cur_short = int(float(_p.get("pos") or 0))
+        except Exception:
+            cur_long = int(getattr(st.position, "long_contracts", 0) or 0)
+            cur_short = int(getattr(st.position, "short_contracts", 0) or 0)
         orders_desc = sorted(orders, key=lambda o: o.get("cTime", "0"), reverse=True)
         start_ts = None
         for o in orders_desc:
