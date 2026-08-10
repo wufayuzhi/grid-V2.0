@@ -174,7 +174,7 @@ def _state_dict(st):
     d = {}
     for k in (
         "running", "inst_id", "margin_mode", "simulated", "ct_val", "leverage",
-        "total_equity", "reserved_capital", "total_pnl", "grid_count",
+        "total_equity", "reserved_capital", "total_pnl", "total_fee", "grid_count",
         "grid_upper_px", "grid_lower_px", "pending_iceberg", "initial_contracts",
         "single_limit", "build_ts", "paused", "target_spacing_pct", "adj_ratio",
         "price_offset_pct", "adjust_split_ratio", "iceberg_sz", "pxVar",
