@@ -280,18 +280,18 @@ def _classify_group(orders):
       - 整组全部撤销 → canceled；shrink 须有真实成交，避免把拆散的 reduceOnly 虚算成纯缩仓
     """
     sides = {(o.get("side"), o.get("posSide"), o.get("reduceOnly", "false")) for o in orders}
+    filled = [o for o in orders if o.get("state") in ("filled", "partially_filled")
+              or _to_f(o.get("accFillSz")) > 0]
     all_canceled = all(o.get("state") == "canceled" for o in orders)
-    any_filled = any(
-        o.get("state") in ("filled", "partially_filled") or _to_f(o.get("accFillSz")) > 0
-        for o in orders)
-    # 成对意图：平多+开空 / 平空+开多（含部分撤销也按意图，不整组降级为撤销）
-    if {("sell", "long", "true"), ("sell", "short", "false")} <= sides:
+    # 成对意图按"成交单"判断(组内部分撤销不降级；避免把实际成交的平空开多误判成平多开空)
+    filled_sides = {(o.get("side"), o.get("posSide"), o.get("reduceOnly", "false")) for o in filled}
+    if {("sell", "long", "true"), ("sell", "short", "false")} <= filled_sides:
         return "pingduo_kaikong"
-    if {("buy", "short", "true"), ("buy", "long", "false")} <= sides:
+    if {("buy", "short", "true"), ("buy", "long", "false")} <= filled_sides:
         return "pingkong_kaiduo"
     if all_canceled:
         return "canceled"
-    if orders and all(o.get("reduceOnly", "false") == "true" for o in orders) and any_filled:
+    if filled and all(o.get("reduceOnly", "false") == "true" for o in filled):
         return "shrink"
     if ("buy", "long", "false") in sides and ("sell", "short", "false") in sides:
         return "build"
@@ -427,7 +427,8 @@ def _serialize_adjust(st):
     seq = 0
     bt = getattr(st, "build_ts", 0.0)
     for r in sorted(getattr(st, "adjust_records", []), key=lambda x: x.get("ts", 0)):
-        if bt > 0 and _to_f(r.get("ts", 0)) < bt:
+        # 记录 ts 为毫秒、build_ts 为秒，需统一单位再比较
+        if bt > 0 and _to_f(r.get("ts", 0)) < bt * 1000.0:
             continue
         r = dict(r)
         g = r["group"]
