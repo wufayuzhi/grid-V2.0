@@ -30,6 +30,12 @@ _ATR_REFRESH_INTERVAL = 60.0
 async def data_loop():
     """异步主循环：延迟后刷新 ticker/OI/持仓余额，触发决策"""
     loop = asyncio.get_event_loop()
+    # 引擎启动时自动回填网格统计(滚动/已实现/手续费，从交易所账单权威计算，幂等)
+    try:
+        from engine.grid import backfill_grid_stats
+        backfill_grid_stats(get_state())
+    except Exception as e:
+        logger.warning(f"启动回填网格统计失败: {e}")
     while True:
         st = get_state()
         await asyncio.sleep(st.data_loop_interval)
