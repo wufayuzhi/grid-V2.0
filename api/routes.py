@@ -365,7 +365,7 @@ def _build_record(orders, gtype):
             return "filled"
         return "canceled"
 
-    # 按"方向侧"分组：开/平分别累计张数 + 状态按实际成交拆分
+    # 按"方向侧(side)"合并：开/平分别累计张数(用户要求合并成🔴开空/平多、🟢开多/平空)
     dir_map = {}
     for o in orders:
         side = o.get("side")
@@ -373,12 +373,8 @@ def _build_record(orders, gtype):
         px = _to_f(o.get("px"))
         sz = _to_f(o.get("sz"))
         st = _detail_state(o)
-        if gtype == "canceled":
-            key = side
-            label = CANCEL_SIDE_LABEL.get(side, DIR_LABEL.get((side, ps), side))
-        else:
-            key = (side, ps)
-            label = DIR_LABEL.get(key, f"{side}/{ps}")
+        key = side
+        label = CANCEL_SIDE_LABEL.get(side, DIR_LABEL.get((side, ps), side))
         if key not in dir_map:
             dir_map[key] = {
                 "side": side, "pos_side": ps,
