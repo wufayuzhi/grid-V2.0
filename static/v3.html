@@ -2370,10 +2370,27 @@ function closeAdjustModal() {
 
 
 // ── Toggle sim/real ──
+// 点开关 → 弹美观确认框（网格运行则重点提醒会停网格）→ 点确定才切换 + 联动刷新
 async function toggleSim() {
+  const target = S.simulated ? '实盘' : '模拟盘';
+  const hasGrid = !!S.running;
+  const desc = hasGrid
+    ? `⚠️ 当前网格正在运行（${S.inst_id}）！\n\n切换到${target}将【停止当前网格】并重置网格状态。\n\n确定要切换吗？`
+    : `确定切换到${target}吗？\n\n切换后行情/账户将刷新为对应模式数据。`;
+  showGuardConfirm(desc, doToggleSim);
+}
+async function doToggleSim() {
   showOverlay('切换模式…');
   await callPost(API_BASE + '/api/v1/grid/demo-mode', { enabled: !S.simulated });
-  loadChartData();
+  // 切换后联动刷新：state / K线 / 行情条 / 预检 / 杠杆档位 / 余额（读对应模式账户）
+  await Promise.all([
+    refresh(),
+    loadChartData(),
+    fetchMarketData(S.inst_id),
+    fetchPrecheck(),
+    fetchLeverOptions(),
+    fetchBalance(),
+  ]);
   hideOverlay();
 }
 
