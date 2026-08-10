@@ -761,7 +761,7 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
   <div class="met-cell"><div class="ml">安全距离</div><div class="mv" id="m-sd">—</div></div>
   <div class="met-cell"><div class="ml">liqPx</div><div class="mv" id="m-liq">—</div></div>
   <div class="met-cell"><div class="ml">网格</div><div class="mv" id="m-gc">0</div></div>
-  <div class="met-cell"><div class="ml">利润</div><div class="mv" id="m-pnl">0.00</div></div>
+  <div class="met-cell"><div class="ml">净收益</div><div class="mv" id="m-pnl">0.00</div><div class="mn-sub" id="m-pnl-sub" style="font-size:10px;opacity:.65;font-weight:normal;margin-top:2px">—</div></div>
 </div>
 
 <!-- ═══════ LAYER 5: CONTROL ═══════ -->
@@ -1754,9 +1754,14 @@ async function refresh() {
     document.getElementById('m-liq').textContent =
       (longLiq > 0 || shortLiq > 0) ? '✅ 已获取' : '—';
     document.getElementById('m-gc').textContent = S.grid_count || 0;
+    // 净收益 = 已实现 + 浮盈(动态 upl) − 手续费；浮盈来自当前持仓实时值
+    const upnl = (S.long?.unrealized_pnl || 0) + (S.short?.unrealized_pnl || 0);
+    const netPnl = (S.total_pnl || 0) + upnl - (S.total_fee || 0);
     const pnlEl = document.getElementById('m-pnl');
-    pnlEl.textContent = (S.total_pnl || 0).toFixed(2);
-    pnlEl.className = 'mv ' + ((S.total_pnl || 0) >= 0 ? 'up' : 'down');
+    pnlEl.textContent = netPnl.toFixed(2);
+    pnlEl.className = 'mv ' + (netPnl >= 0 ? 'up' : 'down');
+    const pnlSub = document.getElementById('m-pnl-sub');
+    pnlSub.textContent = `已实现${(S.total_pnl||0).toFixed(2)} + 浮盈${upnl.toFixed(2)} − 费${(S.total_fee||0).toFixed(2)}`;
 
     // ── 委托记录 & 调平记录（拉交易所真实数据，节流10s）──
     if (Date.now() - (_tradeTick || 0) > 10000) {

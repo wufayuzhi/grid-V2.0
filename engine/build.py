@@ -71,12 +71,13 @@ def execute_start_grid(contracts: int = 0) -> dict:
     if st.position.long_contracts > 0 or st.position.short_contracts > 0:
         st.running = True
         st.pending_iceberg = 0
-        # 认领交易所现有挂单，避免下轮 check_grid_tick 走破坏性撤单重挂
+        # 认领交易所现有挂单，避免下轮 check_grid_tick 走破坏性撤单重挂；并回填网格统计
         try:
-            from engine.grid import adopt_or_reset_grid_orders
+            from engine.grid import adopt_or_reset_grid_orders, backfill_grid_stats
             adopt_or_reset_grid_orders(st)
+            backfill_grid_stats(st)
         except Exception as e:
-            _log(st, f"⚠️ 恢复时认领挂单异常: {e}", level="WARN")
+            _log(st, f"⚠️ 恢复时认领/回填异常: {e}", level="WARN")
         _log(st, f"✅ 网格已恢复运行（多{st.position.long_contracts}/空{st.position.short_contracts}）")
         save_state()
         return {"status": "ok", "data": {"contracts": st.position.long_contracts, "resumed": True}}

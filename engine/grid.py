@@ -104,6 +104,121 @@ def _notify_trade(st, desc, side):
         logger.debug(f"notify_trade: {e}")
 
 
+def _fetch_all_order_history(client, inst_id):
+    """拉全订单历史(orders-history + archive，分页，before 拉更早)。"""
+    orders = []
+    for ep in ("/api/v5/trade/orders-history", "/api/v5/trade/orders-history-archive"):
+        before_ts = ""
+        guard = 0
+        while guard < 30:
+            guard += 1
+            p = {"instType": "SWAP", "instId": inst_id, "limit": "100"}
+            if before_ts:
+                p["before"] = before_ts
+            try:
+                r = client._request("GET", ep, params=p)
+            except Exception as e:
+                logger.warning(f"拉订单历史异常({ep}): {e}")
+                break
+            items = r.get("data", []) if isinstance(r, dict) else r
+            if not items:
+                break
+            orders.extend(items)
+            before_ts = items[-1]["cTime"]
+    return orders
+
+
+def backfill_grid_stats(st) -> None:
+    """回填网格滚动次数与累加已实现收益（系统自动识别本次网格起点，不靠人告诉）。
+
+    逻辑：订单历史倒序追踪持仓 → 找最近一次"持仓归零"（旧轮次结束）
+          → 归零后第一次成对建仓 = 本次网格起点；之前旧轮次自动排除。
+    滚动次数 = 起点后成对平仓成交次数；收益 = 起点后账单 pnl 累加(覆盖 fills 窗口外)。
+    幂等：仅当 grid_count==0 时执行；失败不破坏现有状态。
+    """
+    if (getattr(st, "grid_count", 0) or 0) > 0:
+        return
+    try:
+        from data.exchange import get_auth_client
+        client = get_auth_client()
+        if client is None:
+            return
+        inst = st.inst_id
+        orders = _fetch_all_order_history(client, inst)
+        if not orders:
+            return
+        # ① 倒序追踪持仓，找最近一次"持仓归零"时刻(旧轮次结束)
+        cur_long = int(getattr(st.position, "long_contracts", 0) or 0)
+        cur_short = int(getattr(st.position, "short_contracts", 0) or 0)
+        orders_desc = sorted(orders, key=lambda o: o.get("cTime", "0"), reverse=True)
+        start_ts = None
+        for o in orders_desc:
+            if o.get("state") != "filled":
+                continue
+            side = o.get("side"); pos = o.get("posSide"); sz = int(o.get("sz") or 0)
+            if pos == "long":
+                cur_long += sz if side == "sell" else -sz
+            elif pos == "short":
+                cur_short += sz if side == "buy" else -sz
+            if cur_long <= 0 and cur_short <= 0:
+                start_ts = o.get("cTime")
+                break
+        if start_ts is None:
+            start_ts = orders_desc[-1].get("cTime", "0")
+        # ② 拉全账单(带重试避开限流) — 滚动/已实现/手续费统一从账单(权威)
+        bills = []
+        try:
+            before_ts = ""
+            guard = 0
+            while guard < 50:
+                guard += 1
+                p = {"instType": "SWAP", "instId": inst, "limit": "100"}
+                if before_ts:
+                    p["before"] = before_ts
+                ok = False
+                for _a in range(5):
+                    try:
+                        r = client._request("GET", "/api/v5/account/bills", params=p)
+                        ok = True
+                        break
+                    except Exception:
+                        time.sleep(2)
+                if not ok:
+                    break
+                items = r.get("data", []) if isinstance(r, dict) else r
+                if not items:
+                    break
+                bills.extend(items)
+                before_ts = items[-1]["ts"]
+        except Exception as e:
+            logger.warning(f"回填拉账单失败: {e}")
+        # ③ 滚动次数 + 已实现 + 手续费: 账单 subType5/6=平多/平空(权威)
+        roll_cnt = 0
+        pnl_total = 0.0
+        fee_total = 0.0
+        seen = set()
+        for b in bills:
+            ts = b.get("ts", "")
+            if not ts or int(ts) <= int(start_ts):
+                continue
+            st_ = int(b.get("subType") or 0)
+            if st_ in (5, 6):
+                k = (b.get("ts"), b.get("ordId"), b.get("sz"))
+                if k not in seen:
+                    seen.add(k)
+                    roll_cnt += 1
+                pnl_total += float(b.get("pnl") or 0)
+            if st_ in (1, 2, 3, 4, 5, 6):
+                fee_total += float(b.get("fee") or 0)  # fee 为负(支出)
+        st.grid_count = roll_cnt
+        st.total_pnl = round(pnl_total, 2)
+        st.total_fee = round(abs(fee_total), 2)  # 正数: 前端 已实现+浮盈-手续费
+        save_state()
+        _log(st, f"📊 回填网格统计: 滚动{roll_cnt}次, 已实现{pnl_total:+.2f}U, 手续费{abs(fee_total):.2f}U", cat="GRID")
+    except Exception as e:
+        logger.warning(f"回填网格统计失败: {e}")
+
+
 def _mode_base_density(st) -> float:
     """模式base密度：进攻=base_density，防守=defense_density（文档§5.1）。"""
     if getattr(st, "mode", "attack") == "defense":
@@ -293,7 +408,7 @@ def _cancel_orders(st, ord_ids: list) -> None:
             logger.debug(f"撤单 {oid} 异常: {e}")
 
 
-def _verify_filled(client, inst_id: str, ord_ids: list) -> tuple[bool, dict]:
+def _verify_filled(client, inst_id: str, ord_ids: list) -> tuple[bool, dict, float]:
     """逐个核实 ordId 的真实状态，判断是否真正成交。
 
     背景：grid.py 原判定把"pending 查询结果中缺单/空"直接当"成交"，网络抖动时
@@ -302,22 +417,27 @@ def _verify_filled(client, inst_id: str, ord_ids: list) -> tuple[bool, dict]:
       - canceled          → 被撤（非成交，诊断）
       - live/空           → 仍在挂单中（pending查询延迟/异常）→ 不算成交
       - 查询抛异常/无数据 → 无法确认 → 不算成交，由调用方跳过本轮
-    返回 (是否确认真成交, 各单state明细)。任何一单查询失败返回 (False, {})。
+    返回 (是否确认真成交, 各单state明细, 成交订单累计手续费)。任何一单查询失败返回 (False, {}, 0)。
     """
     states: dict[str, str] = {}
+    fees = 0.0
     for oid in ord_ids:
         try:
             o = client.get_order(inst_id, oid)
         except Exception as e:
             logger.warning(f"核实成交状态失败 {oid}: {e} → 本轮跳过，不判定成交")
-            return False, {}
+            return False, {}, 0
         stt = (o or {}).get("state", "") if isinstance(o, dict) else ""
         if not stt:
             logger.warning(f"核实成交状态无数据 {oid} → 本轮跳过，不判定成交")
-            return False, {}
+            return False, {}, 0
         states[oid] = stt
+        try:
+            fees += abs(float((o or {}).get("fee") or 0))
+        except Exception:
+            pass
     filled = all(states.get(oid) == "filled" for oid in ord_ids) if ord_ids else False
-    return filled, states
+    return filled, states, fees
 
 
 def place_grid_orders(st) -> dict:
@@ -467,7 +587,7 @@ def check_grid_tick(st) -> None:
 
     # 上端可能成交：核实
     if up_missing:
-        filled_up, states_up = _verify_filled(client, st.inst_id, up_missing)
+        filled_up, states_up, fees_up = _verify_filled(client, st.inst_id, up_missing)
         if not filled_up:
             # 无法确认成交（查询失败/仍在挂单/被撤）→ 跳过本轮，记诊断日志，不误撤
             logger.warning(
@@ -482,6 +602,7 @@ def check_grid_tick(st) -> None:
         _pnl_up = (_grid_step_contracts(st) * float(st.ct_val or 0)
                    * (float(st.grid_upper_px or 0) - float(st.position.long_avg_px or 0)))
         st.total_pnl = round((st.total_pnl or 0) + _pnl_up, 2)
+        st.total_fee = round((st.total_fee or 0) + fees_up, 2)
         _log(st, f"💰 上端成交锁定 {_pnl_up:+.2f}U (网格#{st.grid_count})", cat="GRID")
         if lo:
             _cancel_orders(st, [oid for oid in lo if oid in pending_ids])
@@ -493,7 +614,7 @@ def check_grid_tick(st) -> None:
 
     # 下端可能成交：核实
     if lo_missing:
-        filled_lo, states_lo = _verify_filled(client, st.inst_id, lo_missing)
+        filled_lo, states_lo, fees_lo = _verify_filled(client, st.inst_id, lo_missing)
         if not filled_lo:
             logger.warning(
                 f"下端单疑似变动但未确认真成交: missing={lo_missing} "
@@ -507,6 +628,7 @@ def check_grid_tick(st) -> None:
         _pnl_lo = (_grid_step_contracts(st) * float(st.ct_val or 0)
                    * (float(st.position.short_avg_px or 0) - float(st.grid_lower_px or 0)))
         st.total_pnl = round((st.total_pnl or 0) + _pnl_lo, 2)
+        st.total_fee = round((st.total_fee or 0) + fees_lo, 2)
         _log(st, f"💰 下端成交锁定 {_pnl_lo:+.2f}U (网格#{st.grid_count})", cat="GRID")
         if up:
             _cancel_orders(st, [oid for oid in up if oid in pending_ids])
