@@ -218,6 +218,7 @@ class GridState:
             "reserved_capital": round(self.reserved_capital, 2),
             "grid_available": round(self.grid_available, 2),
             "total_pnl": round(self.total_pnl, 2),
+            "total_fee": round(getattr(self, "total_fee", 0), 2),
             "grid_count": self.grid_count,
             "grid_upper_px": round(self.grid_upper_px, 2),
             "grid_lower_px": round(self.grid_lower_px, 2),
