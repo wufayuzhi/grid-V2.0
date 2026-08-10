@@ -30,6 +30,55 @@ def _log(st, msg, level="INFO", cat="GRID", data=None):
         st.logs = st.logs[-300:]
 
 
+# OKX clOrdId 归属前缀：引擎挂单都带此前缀，用于启动/恢复时区分"我的单 / 幽灵单"。
+# 不同部署必须用不同前缀，避免跨实例误认领。
+_CLORDID_PREFIX = "gw2seo"
+
+
+def _gen_clordid(idx: int) -> str:
+    """生成 OKX clOrdId（客户端自定义订单ID，当前挂单唯一，≤32位）。
+
+    前缀=引擎标识防碰撞；时间戳+单序号保证同批每单唯一（OKX 要求 live 单唯一）。
+    """
+    return f"{_CLORDID_PREFIX}{int(time.time() * 1000) % 100000000000}{idx}"
+
+
+def adopt_or_reset_grid_orders(st, client=None, pending=None) -> bool:
+    """按 clOrdId 前缀认领交易所现有挂单（自愈式无损接管）。
+
+    - 带 _CLORDID_PREFIX 标记的单 → 按 side 分组重建 grid_upper/lower_ord_ids
+      （sell=上端平多+开空，buy=下端平空+开多），save_state，返回 True。
+    - 无标记的单（幽灵/手动/别的实例）→ 不收养，报警提示，不撤不挂。
+    - API 异常 → 记日志返回 False，不破坏现有状态（下轮重试）。
+    """
+    from data.exchange import get_auth_client
+    if client is None:
+        client = get_auth_client()
+    if client is None:
+        return False
+    try:
+        if pending is None:
+            pending = client.get_orders_pending(st.inst_id) or []
+    except Exception as e:
+        logger.warning(f"认领前查 pending 异常: {e}")
+        return False
+    own = [o for o in pending
+           if str(o.get("clOrdId", "")).startswith(_CLORDID_PREFIX)]
+    others = [o for o in pending
+              if not str(o.get("clOrdId", "")).startswith(_CLORDID_PREFIX)]
+    if others:
+        _log(st, f"⚠️ 发现 {len(others)} 笔非本引擎挂单(无 {_CLORDID_PREFIX} 标记)，"
+                 f"不收养: {[o.get('ordId') for o in others]}", level="WARN", cat="GRID")
+    if not own:
+        return False
+    st.grid_upper_ord_ids = [o["ordId"] for o in own if o.get("side") == "sell"]
+    st.grid_lower_ord_ids = [o["ordId"] for o in own if o.get("side") == "buy"]
+    save_state()
+    _log(st, f"🔁 认领现有挂单: 上={st.grid_upper_ord_ids} 下={st.grid_lower_ord_ids}",
+         cat="GRID")
+    return True
+
+
 def _grid_step_contracts(st) -> int:
     """网格每步换仓张数 N = max(int(总张数 × adj_ratio ÷ 2), 1)。
 
@@ -302,17 +351,18 @@ def place_grid_orders(st) -> dict:
     heavy, _ = _heavy_side(st)
 
     # 基础4单：上端(平多+开空)@upper，下端(平空+开多)@lower
+    # 每单带 clOrdId 归属标记（同批 idx 0-3 保证唯一）
     upper_orders = [
         {"instId": inst, "tdMode": "cross", "side": "sell", "posSide": "long",
-         "ordType": "limit", "px": str(upper), "sz": str(n)},
+         "ordType": "limit", "px": str(upper), "sz": str(n), "clOrdId": _gen_clordid(0)},
         {"instId": inst, "tdMode": "cross", "side": "sell", "posSide": "short",
-         "ordType": "limit", "px": str(upper), "sz": str(n)},
+         "ordType": "limit", "px": str(upper), "sz": str(n), "clOrdId": _gen_clordid(1)},
     ]
     lower_orders = [
         {"instId": inst, "tdMode": "cross", "side": "buy", "posSide": "short",
-         "ordType": "limit", "px": str(lower), "sz": str(n)},
+         "ordType": "limit", "px": str(lower), "sz": str(n), "clOrdId": _gen_clordid(2)},
         {"instId": inst, "tdMode": "cross", "side": "buy", "posSide": "long",
-         "ordType": "limit", "px": str(lower), "sz": str(n)},
+         "ordType": "limit", "px": str(lower), "sz": str(n), "clOrdId": _gen_clordid(3)},
     ]
 
     if one_way and heavy is not None:
@@ -394,13 +444,18 @@ def check_grid_tick(st) -> None:
     up = st.grid_upper_ord_ids or []
     lo = st.grid_lower_ord_ids or []
 
-    # 没有有效挂单追踪 → 重新挂；若交易所还有残留挂单(重启后)先撤干净，防重复
+    # 没有有效挂单追踪 → 先尝试按 clOrdId 认领交易所现有挂单(自愈式无损接管)
     if not up and not lo:
-        if pending_ids:
-            try:
-                client.cancel_all_pending(st.inst_id)
-            except Exception as e:
-                logger.debug(f"清残留挂单异常: {e}")
+        adopted = adopt_or_reset_grid_orders(st, client, pending)
+        if adopted:
+            return  # 已认领接管，下轮按"有挂单记录"正常管理
+        # 无带标记单：若交易所存在无标记挂单(幽灵/手动/别的实例) → 不撤不挂，报警等用户
+        has_ghost = any(
+            not str(o.get("clOrdId", "")).startswith(_CLORDID_PREFIX)
+            for o in pending)
+        if has_ghost:
+            return
+        # 无任何挂单（干净）→ 正常新建
         place_grid_orders(st)
         return
 

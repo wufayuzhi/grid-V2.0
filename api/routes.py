@@ -1144,6 +1144,26 @@ def register_routes(app: FastAPI):
         except Exception as e:
             return {"status": "error", "msg": f"建仓失败: {e}"}
 
+    @app.post("/api/v1/grid/recover")
+    async def recover_grid():
+        """从交易所认领现有挂单并无损恢复运行（自愈式接管，无需重启）。"""
+        st = get_state()
+        try:
+            from engine.grid import adopt_or_reset_grid_orders
+            adopted = adopt_or_reset_grid_orders(st)
+            st.running = True
+            if save_state is not None:
+                save_state()
+            _add_log(st, f"🔁 已恢复接管（认领现有挂单: {adopted}）")
+            try:
+                from notify import on_status
+                on_status("🔁 网格已恢复接管")
+            except Exception:
+                pass
+            return {"status": "ok", "data": {"adopted": adopted}}
+        except Exception as e:
+            return {"status": "error", "msg": f"恢复接管失败: {e}"}
+
     @app.post("/api/v1/admin/reload-build")
     async def admin_reload_build():
         try:
