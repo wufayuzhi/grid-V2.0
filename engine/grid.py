@@ -477,6 +477,12 @@ def check_grid_tick(st) -> None:
             return
         _log(st, f"🔺 上端成交(平多+开空) → 撤下端, 重挂", cat="GRID")
         _notify_trade(st, "平多/开空", "upper")
+        # 网格滚动次数+1；锁定上端已实现收益 = N×面值×(挂单价upper−多头开仓均价)
+        st.grid_count = (st.grid_count or 0) + 1
+        _pnl_up = (_grid_step_contracts(st) * float(st.ct_val or 0)
+                   * (float(st.grid_upper_px or 0) - float(st.position.long_avg_px or 0)))
+        st.total_pnl = round((st.total_pnl or 0) + _pnl_up, 2)
+        _log(st, f"💰 上端成交锁定 {_pnl_up:+.2f}U (网格#{st.grid_count})", cat="GRID")
         if lo:
             _cancel_orders(st, [oid for oid in lo if oid in pending_ids])
         st.grid_upper_ord_ids = []
@@ -496,6 +502,12 @@ def check_grid_tick(st) -> None:
             return
         _log(st, f"🔻 下端成交(平空+开多) → 撤上端, 重挂", cat="GRID")
         _notify_trade(st, "平空/开多", "lower")
+        # 网格滚动次数+1；锁定下端已实现收益 = N×面值×(空头开仓均价−挂单价lower)
+        st.grid_count = (st.grid_count or 0) + 1
+        _pnl_lo = (_grid_step_contracts(st) * float(st.ct_val or 0)
+                   * (float(st.position.short_avg_px or 0) - float(st.grid_lower_px or 0)))
+        st.total_pnl = round((st.total_pnl or 0) + _pnl_lo, 2)
+        _log(st, f"💰 下端成交锁定 {_pnl_lo:+.2f}U (网格#{st.grid_count})", cat="GRID")
         if up:
             _cancel_orders(st, [oid for oid in up if oid in pending_ids])
         st.grid_upper_ord_ids = []
