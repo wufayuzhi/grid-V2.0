@@ -1103,13 +1103,13 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
       <!-- ⚙ 指标组（止盈线 + K线指标） -->
       <div class="pm-group" id="pmg-ind">
         <div class="pm-left">
-          <div class="sw-row"><label><input type="checkbox" id="ch-supertrend-m" checked onchange="redrawLines()"> 超级趋势</label>
-            <label style="margin-left:16px"><input type="checkbox" id="ch-st-bg-m" onchange="redrawLines()"> 背景</label></div>
+          <div class="sw-row"><label><input type="checkbox" id="ch-supertrend-m" checked onchange="saveKlinePrefs();redrawLines()"> 超级趋势</label>
+            <label style="margin-left:16px"><input type="checkbox" id="ch-st-bg-m" onchange="saveKlinePrefs();redrawLines()"> 背景</label></div>
           <div class="sl-row"><span>ATR周期</span><select id="mod-st_period" onchange="onSTChange()"><option value="7">7</option><option value="10" selected>10</option><option value="14">14</option><option value="20">20</option></select></div>
           <div class="sl-row"><span>乘数</span><select id="mod-st_mult" onchange="onSTChange()"><option value="2.0">2.0</option><option value="3.0" selected>3.0</option><option value="4.0">4.0</option></select></div>
           <div class="pm-div"></div>
-          <div class="sw-row"><label><input type="checkbox" id="ch-ema1-m" checked onchange="redrawLines()"> EMA1</label> 周期 <input type="number" id="ch-ema1p" value="25" min="1" max="999" step="1" onchange="redrawLines()" style="width:50px;padding:3px;font-size:11px;border:1px solid var(--bd);border-radius:4px"></div>
-          <div class="sw-row"><label><input type="checkbox" id="ch-ema2-m" checked onchange="redrawLines()"> EMA2</label> 周期 <input type="number" id="ch-ema2p" value="99" min="1" max="999" step="1" onchange="redrawLines()" style="width:50px;padding:3px;font-size:11px;border:1px solid var(--bd);border-radius:4px"></div>
+          <div class="sw-row"><label><input type="checkbox" id="ch-ema1-m" checked onchange="saveKlinePrefs();redrawLines()"> EMA1</label> 周期 <input type="number" id="ch-ema1p" value="25" min="1" max="999" step="1" onchange="saveKlinePrefs();redrawLines()" style="width:50px;padding:3px;font-size:11px;border:1px solid var(--bd);border-radius:4px"></div>
+          <div class="sw-row"><label><input type="checkbox" id="ch-ema2-m" checked onchange="saveKlinePrefs();redrawLines()"> EMA2</label> 周期 <input type="number" id="ch-ema2p" value="99" min="1" max="999" step="1" onchange="saveKlinePrefs();redrawLines()" style="width:50px;padding:3px;font-size:11px;border:1px solid var(--bd);border-radius:4px"></div>
           <div class="pm-div"></div>
           <div class="pm-sub">止盈线（24h 滚动递增档）</div>
           <div class="sl-row"><span>止盈线基础%</span><span class="sl-val" id="sl-tp_base_pct">1.0</span></div>
@@ -1337,6 +1337,45 @@ function initMob() {
 if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initMob); }
 else { initMob(); }
 
+// ── K线图指标参数前端持久化（localStorage）──
+// 作用：ATR周期/乘数、EMA1周期、EMA2周期、各指标显示开关，
+//       这些是纯K线图展示参数（不参与后端交易逻辑），用 localStorage 保存，刷新页面回显。
+//       避免每次刷新都回到 HTML 写死的 ATR10 / EMA25 / EMA99。
+function saveKlinePrefs() {
+  try {
+    localStorage.setItem('gw2_kline_prefs', JSON.stringify({
+      st_period: document.getElementById('mod-st_period')?.value,
+      st_mult:   document.getElementById('mod-st_mult')?.value,
+      ema1:      document.getElementById('ch-ema1p')?.value,
+      ema2:      document.getElementById('ch-ema2p')?.value,
+      show_st:   document.getElementById('ch-supertrend-m')?.checked,
+      show_bg:   document.getElementById('ch-st-bg-m')?.checked,
+      show_e1:   document.getElementById('ch-ema1-m')?.checked,
+      show_e2:   document.getElementById('ch-ema2-m')?.checked
+    }));
+  } catch (e) {}
+}
+function restoreKlinePrefs() {
+  try {
+    const raw = localStorage.getItem('gw2_kline_prefs');
+    if (!raw) return;
+    const p = JSON.parse(raw);
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null && v !== '') el.value = v; };
+    setVal('mod-st_period', p.st_period);
+    setVal('mod-st_mult', p.st_mult);
+    setVal('ch-ema1p', p.ema1);
+    setVal('ch-ema2p', p.ema2);
+    const setChk = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.checked = v; };
+    setChk('ch-supertrend-m', p.show_st);
+    setChk('ch-st-bg-m', p.show_bg);
+    setChk('ch-ema1-m', p.show_e1);
+    setChk('ch-ema2-m', p.show_e2);
+  } catch (e) {}
+}
+// 页面加载即回显 K线指标（DOM ready，不依赖图表库 onload）
+if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', restoreKlinePrefs); }
+else { restoreKlinePrefs(); }
+
 function main() {
 
 // ══════════════════════════════════════════════════════════════
@@ -1358,6 +1397,7 @@ let chart = null, series = null, lineSeries = {};
 let _adapterTick = 0,   // 最后一次适配器拉取时间戳
     _marketTickers = [], // 从 /api/v1/adapter 缓存的最新 tickers
     _slidersSynced = false,
+    _levSynced = false,  // 杠杆是否已从后端回填过（避免每轮刷新覆盖用户拖动）
     _precheckTick = 0,
     _tradeTick = 0,   // 委托/调平记录拉取节流
     _pendingChanges = {},
@@ -1400,7 +1440,9 @@ function initChart() {  const el = document.getElementById('chart-container');  
   series = chart.addCandlestickSeries({
     upColor: '#10B981', downColor: '#EF4444',
     borderUpColor: '#10B981', borderDownColor: '#EF4444',
-    wickUpColor: '#10B981', wickDownColor: '#EF4444'
+    wickUpColor: '#10B981', wickDownColor: '#EF4444',
+    // 高精度价格刻度：避免 0.0065 这类小价位的币被默认2位小数压成 0.01/0.1
+    priceFormat: { type: 'price', precision: 6, minMove: 0.000001 }
   });
   // 预创建所有指标系列（只创建一次，后续只更新数据）
   lineSeries.st = chart.addLineSeries({ color: '#10B981', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, visible: true, priceScaleId: 'right' });
@@ -1685,6 +1727,17 @@ async function refresh() {
     document.getElementById('ctrl-avail').textContent =
       (S.grid_available || 0).toLocaleString() + ' USDT';
     // ctrl-lev 由 onLevChange() 管理，此处不覆盖
+    // 杠杆：仅首次加载时从后端真实值回填滑块+文字（避免每轮刷新覆盖用户拖动）
+    if (!_levSynced && S.params && S.params.leverage) {
+      _levSynced = true;
+      const levReal = S.params.leverage;
+      const levSlider = document.getElementById('lev-slider');
+      if (levSlider) levSlider.value = levReal;
+      const ctrlLev = document.getElementById('ctrl-lev');
+      if (ctrlLev) ctrlLev.textContent = levReal + 'x';
+      const mobLev = document.getElementById('mob-lev-val');
+      if (mobLev) mobLev.textContent = levReal + 'x';
+    }
     // 合约规格（交易所面值）
     if (S.ct_val) document.getElementById('ctrl-ctval').textContent = S.inst_id.replace('-USDT-SWAP','') + ' × ' + S.ct_val;
     // L5 初始建仓/单边极限 — 由 fetchPrecheck() 更新
@@ -1700,18 +1753,57 @@ async function refresh() {
     updateWcMaskedTag();
 
     // ── L6: Sliders one-time sync from server ──
+    // 全量回填：把后端 params 里的真实值同步到前端滑块+数值标签，刷新页面不再回写死默认值
     if (!_slidersSynced) {
       _slidersSynced = true;
-      ['safety_factor', 'shrink_pct', 'bleed_threshold_pct', 'target_spacing_pct',
-       'adj_ratio', 'price_offset_pct', 'imbalance_threshold_pct', 'oi_spike_pct', 'oi_drop_pct',
-       'oi_lock_base', 'iceberg_sz', 'pxVar', 'imbalance_blowup_pct', 'rebalance_target_pct',
-       'adjust_split_ratio', 'tp_base_pct', 'tp_window_hours', 'bleed_window_sec',
-       'equity_history_window_sec'].forEach(k => {
-        const slider = document.getElementById('mod-' + k);
-        if (slider && p[k] !== undefined) {
-          slider.value = p[k];
-          const lbl = document.getElementById('sl-' + k);
-          if (lbl) lbl.textContent = p[k];
+      // [滑块id, 后端参数key]：覆盖所有有滑块控件的参数（含带 mod-trend_ 前缀的趋势组）
+      const sliderMap = [
+        ['mod-safety_factor','safety_factor'],
+        ['mod-shrink_pct','shrink_pct'],
+        ['mod-bleed_threshold_pct','bleed_threshold_pct'],
+        ['mod-target_spacing_pct','target_spacing_pct'],
+        ['mod-adj_ratio','adj_ratio'],
+        ['mod-price_offset_pct','price_offset_pct'],
+        ['mod-imbalance_threshold_pct','imbalance_threshold_pct'],
+        ['mod-oi_spike_pct','oi_spike_pct'],
+        ['mod-oi_drop_pct','oi_drop_pct'],
+        ['mod-oi_lock_base','oi_lock_base'],
+        ['mod-iceberg_sz','iceberg_sz'],
+        ['mod-pxVar','pxVar'],
+        ['mod-imbalance_blowup_pct','imbalance_blowup_pct'],
+        ['mod-rebalance_target_pct','rebalance_target_pct'],
+        ['mod-adjust_split_ratio','adjust_split_ratio'],
+        ['mod-tp_base_pct','tp_base_pct'],
+        ['mod-tp_window_hours','tp_window_hours'],
+        ['mod-bleed_window_sec','bleed_window_sec'],
+        ['mod-equity_history_window_sec','equity_history_window_sec'],
+        // 网格调仓组
+        ['mod-base_density','base_density'],
+        ['mod-density_min','density_min'],
+        ['mod-atr_period','atr_period'],
+        // 风控强度组
+        ['mod-cumulative_drawdown_threshold','cumulative_drawdown_threshold'],
+        ['mod-safety_flat_threshold','safety_flat_threshold'],
+        // 失衡监控组
+        ['mod-one_way_threshold','one_way_threshold'],
+        ['mod-confirm_time','confirm_time'],
+        ['mod-exit_buffer','exit_buffer'],
+        ['mod-debounce_loss_line','debounce_loss_line'],
+        ['mod-debounce_profit_line','debounce_profit_line'],
+        // 单边趋势组（滑块id带 mod-trend_ 前缀，后端key不带）
+        ['mod-ema_fast','ema_fast'],
+        ['mod-ema_slow','ema_slow'],
+        ['mod-trend_st_period','st_period'],
+        ['mod-trend_st_mult','st_mult'],
+        ['mod-oi_n','oi_n'],
+        ['mod-defense_density','defense_density']
+      ];
+      sliderMap.forEach(([sid, key]) => {
+        const slider = document.getElementById(sid);
+        if (slider && p[key] !== undefined) {
+          slider.value = p[key];
+          const lbl = document.getElementById('sl-' + key);
+          if (lbl) lbl.textContent = p[key];
         }
       });
     }
@@ -2889,6 +2981,7 @@ function onSTChange() {
   const mult = document.getElementById('mod-st_mult').value;
   _pendingChanges.st_period = parseInt(period);
   _pendingChanges.st_mult = parseFloat(mult);
+  saveKlinePrefs();          // 持久化 K线图指标参数到 localStorage
   redrawLines();
   updatePMFormula('ind');
   updatePMResult('ind');
