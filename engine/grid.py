@@ -605,6 +605,14 @@ def check_grid_tick(st) -> None:
                 f"上端单疑似变动但未确认真成交: missing={up_missing} "
                 f"states={states_up} pending空={not pending_ids} → 跳过本轮"
             )
+            # 若待核实单在交易所全部查无此单(states空) → 脏追踪残留
+            # (历史切换/撤单遗留的ordId), 清掉重新挂, 否则引擎永久卡住
+            if not states_up and up_missing and not pending_ids:
+                logger.warning(f"上端挂单追踪为脏ID({up_missing}) 交易所无此单 → 清残留重新挂单")
+                st.grid_upper_ord_ids = []
+                st.grid_lower_ord_ids = []
+                save_state()
+                place_grid_orders(st)
             return
         _log(st, f"🔺 上端成交(平多+开空) → 撤下端, 重挂", cat="GRID")
         _notify_trade(st, "平多/开空", "upper")
@@ -631,6 +639,13 @@ def check_grid_tick(st) -> None:
                 f"下端单疑似变动但未确认真成交: missing={lo_missing} "
                 f"states={states_lo} pending空={not pending_ids} → 跳过本轮"
             )
+            # 若待核实单在交易所全部查无此单(states空) → 脏追踪残留, 清掉重新挂
+            if not states_lo and lo_missing and not pending_ids:
+                logger.warning(f"下端挂单追踪为脏ID({lo_missing}) 交易所无此单 → 清残留重新挂单")
+                st.grid_upper_ord_ids = []
+                st.grid_lower_ord_ids = []
+                save_state()
+                place_grid_orders(st)
             return
         _log(st, f"🔻 下端成交(平空+开多) → 撤上端, 重挂", cat="GRID")
         _notify_trade(st, "平空/开多", "lower")
