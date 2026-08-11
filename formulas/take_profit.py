@@ -6,7 +6,9 @@ formulas/take_profit.py — 止盈线（纯函数，无副作用）
 当账户总权益(eq) 达到当前档位对应百分比，且在该24h档位窗口内 → 全平止盈。
 超过当前档位未达标，则继续网格运行，进入下一档。
 
-注意：止盈判断用【账户总权益 eq】，而风控/防堆仓用【净浮盈 upl】——两者用途不同。
+注意：止盈判断用【账户总权益 eq】相对【本金基准 capital】的盈利百分比，
+      capital = 建仓时总权益（含预留）。故预留的锁定资金不算盈利——须真赚够 eq 的1%才全平。
+      风控/防堆仓则用【净浮盈 upl】，两者用途不同。
 """
 from __future__ import annotations
 import time
@@ -39,4 +41,5 @@ def should_take_profit(build_ts: float, total_equity: float, capital: float,
         return False, 0.0
     tp = current_tp_level(build_ts, base_pct, window_hours, now)
     profit_ratio = (total_equity - capital) / capital * 100
-    return profit_ratio >= tp, tp
+    # 浮点容差：消除 (eq-capital)/capital*100 在整档边界(如1.0%)因精度差一点导致漏触发
+    return profit_ratio + 1e-9 >= tp, tp

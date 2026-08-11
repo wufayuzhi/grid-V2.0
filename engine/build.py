@@ -137,11 +137,11 @@ def execute_start_grid(contracts: int = 0) -> dict:
     # 更新状态
     st.initial_contracts = init_c
     st.single_limit = init_c  # 单边极限 = 每边张数（已÷2）
-    # 本金基准 = 建仓时刻网格可用资金（总权益 - 预留锁定）
-    # 总权益 ≠ 网格可用：止盈/收益判断以网格可用为基准，避免用默认1000导致止盈秒触发
-    st.capital = max(st.total_equity - st.reserved_capital, 1)
-    _log(st, f"💰 本金基准锁定: 网格可用 {st.capital:.2f} USDT"
-             f"（总权益{st.total_equity:.2f} - 预留{st.reserved_capital:.2f}）", cat="PARAM")
+    # 本金基准 = 建仓时刻总权益（含预留）
+    # 止盈公式 profit_ratio=(当前总权益-本金基准)/本金基准：预留的1000不算盈利，须真赚够1%才全平
+    st.capital = max(st.total_equity, 1)  # 本金基准 = 建仓时总权益(含预留)，止盈按此口径
+    _log(st, f"💰 本金基准锁定: 总权益 {st.capital:.2f} USDT"
+             f"（预留{st.reserved_capital:.2f}，网格可用{st.capital - st.reserved_capital:.2f}）", cat="PARAM")
     st.position.long_contracts = init_c
     st.position.short_contracts = init_c
     st.position.long_avg_px = px
