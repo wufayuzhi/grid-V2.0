@@ -32,6 +32,8 @@ os.makedirs(DATA_DIR, exist_ok=True)
 _auth_client: Optional[RawOkxRestClient] = None
 _auth_ready: bool = False
 _available_inst_ids: Set[str] = set()
+# instId → tickSz（价格最小变动单位，交易所下发）。用于前端价格精度与交易所对齐。
+_inst_tick_sz: dict = {}
 
 
 # ─── API密钥管理 ───
@@ -106,14 +108,22 @@ def build_auth_client():
 
 def refresh_available_instruments():
     """刷新当前模式可交易的合约列表（模拟盘自动带 x-simulated-trading 头）"""
-    global _available_inst_ids
+    global _available_inst_ids, _inst_tick_sz
     st = get_state()
     try:
         pub = RawOkxRestClient(timeout=10, simulated=st.simulated)
         instruments = pub.get_instruments("SWAP")
         _available_inst_ids = {i["instId"] for i in instruments} if instruments else set()
+        # 同步缓存每个合约的价格精度 tickSz（前端价格显示与交易所对齐）
+        _inst_tick_sz = {}
+        if instruments:
+            for i in instruments:
+                try:
+                    _inst_tick_sz[i["instId"]] = float(i.get("tickSz", 0))
+                except Exception:
+                    _inst_tick_sz[i["instId"]] = 0.0
         mode = "模拟盘" if st.simulated else "实盘"
-        logger.info(f"可用合约刷新: {len(_available_inst_ids)} 个（{mode}）")
+        logger.info(f"可用合约刷新: {len(_available_inst_ids)} 个（{mode}）, tickSz 缓存 {len(_inst_tick_sz)}")
     except Exception as e:
         logger.warning(f"可用合约刷新失败: {e}")
 
@@ -132,3 +142,15 @@ def get_auth_client() -> Optional[RawOkxRestClient]:
 def get_available_inst_ids() -> Set[str]:
     """获取可用合约ID集合"""
     return _available_inst_ids
+
+
+def get_inst_tick_sz(inst_id: str) -> float:
+    """获取指定合约的价格精度 tickSz（交易所下发）。查不到返回 0，由调用方兜底。"""
+    try:
+        return _inst_tick_sz.get(inst_id, 0.0)
+    except Exception:
+        return 0.0
+
+
+# tick_sz_decimals / px_round 已移至 formulas.price_precision（避免循环 import）。
+# 此处保留 tick_sz_decimals/px_round 委托，兼容其它文件按 engine.sync 导入。

@@ -52,6 +52,27 @@ try:
 except ImportError:  # pragma: no cover
     get_diag_logger = None
 
+# ── 价格精度（按交易所 tickSz 对齐）──
+try:
+    from formulas.price_precision import px_round as _px_round, tick_sz_decimals as _tick_sz_decimals
+except ImportError:
+    _px_round = None
+    _tick_sz_decimals = None
+
+
+def _safe_px_round(inst_id, px, fallback_decimals=4):
+    """px_round 兜底封装：import 失败时退化为固定 round。"""
+    if _px_round is not None:
+        try:
+            return _px_round(inst_id, px, fallback_decimals)
+        except Exception:
+            pass
+    return round(px, fallback_decimals)
+
+
+px_round = _safe_px_round  # 供本模块内使用（永不 None）
+tick_sz_decimals = (_tick_sz_decimals or (lambda ts: 4))
+
 
 # ── data 层：行情 ──
 try:
@@ -75,11 +96,22 @@ except ImportError:
 try:
     from engine.sync import (
         load_apikey, save_apikey, build_auth_client, refresh_available_instruments,
-        is_auth_ready, get_auth_client, get_available_inst_ids,
+        is_auth_ready, get_auth_client, get_available_inst_ids, get_inst_tick_sz,
     )
 except ImportError:
     load_apikey = save_apikey = build_auth_client = refresh_available_instruments = None
     is_auth_ready = get_auth_client = get_available_inst_ids = None
+    get_inst_tick_sz = None
+
+
+def _safe_tick_sz(inst_id: str) -> float:
+    """get_inst_tick_sz 兜底封装：import 失败返回 0。"""
+    if get_inst_tick_sz is not None:
+        try:
+            return get_inst_tick_sz(inst_id)
+        except Exception:
+            pass
+    return 0.0
 
 # ── 公开行情客户端（杠杆档位等用）──
 try:
@@ -192,18 +224,19 @@ def _state_dict(st):
         d[k] = getattr(st, k, None)
     pos = getattr(st, "position", None)
     if pos is not None:
-        d["mark_px"] = getattr(pos, "mark_px", 0.0)
+        _inst = getattr(st, "inst_id", "")
+        d["mark_px"] = px_round(_inst, getattr(pos, "mark_px", 0.0))
         d["long"] = {
             "contracts": getattr(pos, "long_contracts", 0),
-            "avg_px": round(getattr(pos, "long_avg_px", 0.0), 4),
+            "avg_px": px_round(_inst, getattr(pos, "long_avg_px", 0.0)),
             "unrealized_pnl": round(getattr(pos, "long_unrealized_pnl", 0.0), 2),
-            "liq_px": round(getattr(pos, "long_liq_px", 0.0), 4),
+            "liq_px": px_round(_inst, getattr(pos, "long_liq_px", 0.0)),
         }
         d["short"] = {
             "contracts": getattr(pos, "short_contracts", 0),
-            "avg_px": round(getattr(pos, "short_avg_px", 0.0), 4),
+            "avg_px": px_round(_inst, getattr(pos, "short_avg_px", 0.0)),
             "unrealized_pnl": round(getattr(pos, "short_unrealized_pnl", 0.0), 2),
-            "liq_px": round(getattr(pos, "short_liq_px", 0.0), 4),
+            "liq_px": px_round(_inst, getattr(pos, "short_liq_px", 0.0)),
         }
     d["grid_available"] = round(_grid_available(st), 2)
     d["params"] = {
@@ -244,8 +277,8 @@ def _state_dict(st):
         "use_dynamic_params": getattr(st, "use_dynamic_params", True),
         "target_spacing_pct": getattr(st, "target_spacing_pct", 0.60),
         "adj_ratio": getattr(st, "adj_ratio", 0.06),
-        "grid_upper_px": round(getattr(st, "grid_upper_px", 0.0), 2),
-        "grid_lower_px": round(getattr(st, "grid_lower_px", 0.0), 2),
+        "grid_upper_px": px_round(getattr(st, "inst_id", ""), getattr(st, "grid_upper_px", 0.0)),
+        "grid_lower_px": px_round(getattr(st, "inst_id", ""), getattr(st, "grid_lower_px", 0.0)),
     }
     d["adjust_history"] = getattr(st, "adjust_history", [])[-20:]
     d["calc_details"] = getattr(st, "calc_details", {})
@@ -395,10 +428,13 @@ def _build_record(orders, gtype):
         if st == "filled":
             d["state"] = "filled"
     details = list(dir_map.values())
+    _detail_inst = main.get("instId", "")
     for d in details:
         d["value"] = round(d["value"], 2)
         d["open_sz"] = round(d["open_sz"], 4)
         d["close_sz"] = round(d["close_sz"], 4)
+        d["px"] = px_round(_detail_inst, d.get("px", 0))
+        d["tick_sz"] = _safe_tick_sz(_detail_inst)
     bidirectional = len(dir_map) >= 2
     return {
         "group": gtype,
@@ -406,7 +442,7 @@ def _build_record(orders, gtype):
         "side": main.get("side", ""),
         "ts": _to_f(main.get("cTime")),
         "time_str": _fmt_ms(_to_f(main.get("cTime"))),
-        "avg_px": round(avg_px, 4),
+        "avg_px": px_round(main.get("instId", ""), avg_px),
         "acc_fill_sz": acc_fill,
         "value": round(value, 2),
         "fee": round(sum(_to_f(o.get("fee")) for o in orders), 4),
@@ -725,7 +761,7 @@ def register_routes(app: FastAPI):
                 "vol_24h_usdt": round(vol, 0),
                 "change_24h": round(chg, 2),
                 "change_7d": chg_7d,
-                "last_px": round(px, 2),
+                "last_px": px_round(inst_id, px),
             })
 
         scored.sort(key=lambda x: x["score"], reverse=True)
@@ -841,7 +877,7 @@ def register_routes(app: FastAPI):
         px = get_mark_px()
 
         result = {
-            "inst_id": inst, "leverage": lev, "mark_px": round(px, 2),
+            "inst_id": inst, "leverage": lev, "mark_px": px_round(inst, px),
             "formula_ct": 0, "max_ct": 0, "max_per_side": 0,
             "single_limit": 0, "safety_open": 0,
             "error": "",
@@ -899,7 +935,7 @@ def register_routes(app: FastAPI):
 
         result = {
             "inst_id": inst,
-            "mark_px": round(px, 2),
+            "mark_px": px_round(inst, px),
             "current_leverage": getattr(st, "leverage", 20),
             "grid_capital": round(_grid_available(st), 2),
             "options": [],
@@ -912,7 +948,7 @@ def register_routes(app: FastAPI):
             cached = _lev_opt_cache[cache_key]
             cached["current_leverage"] = getattr(st, "leverage", 20)
             cached["grid_capital"] = round(_grid_available(st), 2)
-            cached["mark_px"] = round(px, 2)
+            cached["mark_px"] = px_round(inst, px)
             for o in cached.get("options", []):
                 o["is_current"] = o.get("leverage") == getattr(st, "leverage", 20)
             cached["_cached"] = True
@@ -1080,7 +1116,7 @@ def register_routes(app: FastAPI):
         return {
             "status": "ok",
             "inst_id": inst,
-            "mark_px": round(px, 2),
+            "mark_px": px_round(inst, px),
             "ct_val": getattr(st, "ct_val", 0.1),
             "grid_capital": round(_grid_available(st), 2),
             "max_lever": tiers_max_lever,
@@ -1139,7 +1175,7 @@ def register_routes(app: FastAPI):
             "exchange_max_per_side": exchange_limit,
             "exchange_max_buy": scaled_buy,
             "exchange_max_sell": scaled_sell,
-            "mark_px": round(px, 2),
+            "mark_px": px_round(inst, px),
             "source": "exchange",
         }
 
@@ -1657,6 +1693,7 @@ def register_routes(app: FastAPI):
                 "side": o.get("side"),
                 "pos_side": o.get("posSide"),
                 "px": px, "sz": sz,
+                "tick_sz": _safe_tick_sz(o.get("instId", "")),
                 "acc_fill_sz": _to_f(o.get("accFillSz")),
                 "value": round(val, 2),
                 "state": o.get("state"),

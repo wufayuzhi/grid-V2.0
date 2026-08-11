@@ -10,6 +10,7 @@ import json
 from dataclasses import dataclass, field
 
 from models import GridState, GridPosition
+from formulas.price_precision import px_round  # 价格按交易所 tickSz 对齐
 
 
 _STATE_FILE = os.environ.get("V2_STATE_FILE", "/app/data/v2_grid_state.json")
@@ -42,17 +43,17 @@ def save_state():
         "total_fee": round(getattr(st, "total_fee", 0), 2),
         "grid_count": st.grid_count,
         "long_contracts": st.position.long_contracts,
-        "long_avg_px": round(st.position.long_avg_px, 2),
+        "long_avg_px": px_round(st.inst_id, st.position.long_avg_px),
         "long_unrealized_pnl": round(st.position.long_unrealized_pnl, 2),
-        "long_liq_px": round(st.position.long_liq_px, 2),
-        "long_be_px": round(st.position.long_be_px, 2),
+        "long_liq_px": px_round(st.inst_id, st.position.long_liq_px),
+        "long_be_px": px_round(st.inst_id, st.position.long_be_px),
         "short_contracts": st.position.short_contracts,
-        "short_avg_px": round(st.position.short_avg_px, 2),
+        "short_avg_px": px_round(st.inst_id, st.position.short_avg_px),
         "short_unrealized_pnl": round(st.position.short_unrealized_pnl, 2),
-        "short_liq_px": round(st.position.short_liq_px, 2),
-        "short_be_px": round(st.position.short_be_px, 2),
-        "mark_px": round(st.position.mark_px, 4),
-        "last_px": round(st.position.last_px, 4),
+        "short_liq_px": px_round(st.inst_id, st.position.short_liq_px),
+        "short_be_px": px_round(st.inst_id, st.position.short_be_px),
+        "mark_px": px_round(st.inst_id, st.position.mark_px),
+        "last_px": px_round(st.inst_id, st.position.last_px),
         "atr_abs": st.atr_abs,
         "atr_pct": st.atr_pct,
         "grid_upper_ord_ids": st.grid_upper_ord_ids[-20:],

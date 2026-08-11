@@ -17,6 +17,7 @@ from state import get_state, save_state
 from diagnostic_logger import get_diag_logger
 from formulas.grid import grid_spacing_pct
 from formulas.safety import calc_imbalance_rate
+from formulas.price_precision import px_round  # 价格按交易所 tickSz 对齐（精度地基，保证盈亏真实）
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ def _notify_trade(st, desc, side):
         pos = st.position
         px = getattr(st, f"grid_{side}_px", 0) or 0
         n = _grid_step_contracts(st)
-        on_trade(desc, n, round(px, 2), round(st.total_equity or 0, 2),
+        on_trade(desc, n, px_round(st.inst_id, px), round(st.total_equity or 0, 2),
                  pos.long_contracts, pos.short_contracts)
     except Exception as e:
         logger.debug(f"notify_trade: {e}")
@@ -393,10 +394,10 @@ def calc_grid_levels(st) -> tuple[float, float]:
         if pos.short_be_px > 0:
             lower = min(lower, pos.short_be_px)
 
-    # 记录展示
+    # 记录展示（价格按交易所 tickSz 对齐，保证锁定收益等计算用真实精度）
     st.grid_spacing_pct = round(spacing, 2)
-    st.grid_upper_px = round(upper, 2)
-    st.grid_lower_px = round(lower, 2)
+    st.grid_upper_px = px_round(st.inst_id, upper)
+    st.grid_lower_px = px_round(st.inst_id, lower)
     st.current_density = round(density, 3)
     st.emergency_state = emergency
     st.heavy_side = heavy

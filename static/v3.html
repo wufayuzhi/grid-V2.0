@@ -1389,6 +1389,7 @@ let S = {
   mark_px: 0, total_equity: 0, total_pnl: 0, grid_available: 0,
   grid_count: 0, net_exposure: 0, imbalance_rate: 0, safety_distance_pct: 0,
   reserved_capital: 0, ct_val: 0.1, margin_mode: 'usdt',
+  tick_sz: 0,   // 当前合约价格精度（交易所下发，供价格显示对齐）
   long:  { contracts: 0, avg_px: 0, unrealized_pnl: 0, liq_px: 0 },
   short: { contracts: 0, avg_px: 0, unrealized_pnl: 0, liq_px: 0 },
   params: {}, adjust_history: [], order_history: []
@@ -1413,6 +1414,20 @@ function fmtVol(v) {
   return Number(v).toFixed(0);
 }
 function fmtPn(v) { if (v == null) return '—'; return (v >= 0 ? '+' : '') + Number(v).toFixed(2); }
+
+// 价格精度跟交易所 tickSz 对齐：S.tick_sz=0.000001→6位, 0.1→1位, 1→0位；无 tickSz 时兜底4位
+function fmtPx(v, ts) {
+  if (v == null || isNaN(v)) return '—';
+  v = Number(v);
+  ts = (ts !== undefined && ts !== null && ts > 0) ? ts : S.tick_sz;
+  let dec = 4;
+  if (ts && ts > 0) {
+    const s = ts.toFixed(10).replace(/0+$/, '');
+    const i = s.indexOf('.');
+    dec = i >= 0 ? s.length - i - 1 : 0;
+  }
+  return v.toFixed(dec);
+}
 
 // ═══════════════════ CHART ═══════════════════
 function initChart() {  const el = document.getElementById('chart-container');  chart = LightweightCharts.createChart(el, {
@@ -1679,7 +1694,7 @@ async function refresh() {
 
     // ── L1: Top Bar ──
     const px = S.mark_px || 0;
-    document.getElementById('top-px').textContent = px.toFixed(4);
+    document.getElementById('top-px').textContent = fmtPx(px);
     const dot = document.getElementById('okx-dot');
     dot.className = 'dot ' + (px > 0 ? 'g' : 'r');
     document.getElementById('okx-status').textContent = px > 0 ? '行情正常' : '等待数据';
@@ -1713,8 +1728,8 @@ async function refresh() {
 
     // ── L2: Market Strip (从 state 更新基础价格，仅当浏览的是实际交易对时) ──
     if (sameInst) {
-      document.getElementById('mkt-mark').textContent = px.toFixed(4);
-      document.getElementById('mkt-last').textContent = px.toFixed(4); // state 只提供 mark_px
+      document.getElementById('mkt-mark').textContent = fmtPx(px);
+      document.getElementById('mkt-last').textContent = fmtPx(px); // state 只提供 mark_px
     }
 
     // ── L4: Positions ──
@@ -1882,6 +1897,7 @@ async function refresh() {
     }
 
     S.mark_px = s.mark_px || 0;
+    S.tick_sz = (s.tick_sz > 0) ? s.tick_sz : S.tick_sz;
 
   } catch (e) { console.log('refresh:', e); }
 }
@@ -1894,14 +1910,14 @@ function updatePos(side, pos, mark) {
   const liqPx = pos.liq_px || 0;
 
   document.getElementById(side + '-ct').textContent = contracts + ' 张';
-  document.getElementById(side + '-liqv').textContent = liqPx > 0 ? liqPx.toFixed(4) : '—';
-  document.getElementById(side + '-mark').textContent = mark > 0 ? mark.toFixed(4) : '—';
-  document.getElementById(side + '-avg').textContent = avg > 0 ? avg.toFixed(4) : '—';
+  document.getElementById(side + '-liqv').textContent = liqPx > 0 ? fmtPx(liqPx) : '—';
+  document.getElementById(side + '-mark').textContent = mark > 0 ? fmtPx(mark) : '—';
+  document.getElementById(side + '-avg').textContent = avg > 0 ? fmtPx(avg) : '—';
 
   // 盈亏平衡价 —— 直接用交易所 bePx（后端从 OKX 读取，pos.be_px），不自算
   const bePx = pos.be_px || 0;
   const be = bePx > 0 ? bePx : 0;
-  document.getElementById(side + '-be').textContent = be > 0 ? be.toFixed(4) : '—';
+  document.getElementById(side + '-be').textContent = be > 0 ? fmtPx(be) : '—';
 
   // MMR
   const mmr = S.mmr || 0.005;
@@ -1951,16 +1967,16 @@ async function fetchMarketData(instId) {
 }
 
 function updateMarketCells(tk) {
-  if (tk.idxPx != null) document.getElementById('mkt-idx').textContent = Number(tk.idxPx).toFixed(4);
+  if (tk.idxPx != null) document.getElementById('mkt-idx').textContent = fmtPx(Number(tk.idxPx));
   let px = tk.last_px || tk.last;
   if (px != null) {
-    document.getElementById('mkt-last').textContent = Number(px).toFixed(4);
-    document.getElementById('mkt-mark').textContent = Number(px).toFixed(4);
-    document.getElementById('top-px').textContent = Number(px).toFixed(4);
+    document.getElementById('mkt-last').textContent = fmtPx(Number(px));
+    document.getElementById('mkt-mark').textContent = fmtPx(Number(px));
+    document.getElementById('top-px').textContent = fmtPx(Number(px));
     S.mark_px = Number(px);
   }
-  if (tk.low24h != null) document.getElementById('mkt-low').textContent = Number(tk.low24h).toFixed(4);
-  if (tk.high24h != null) document.getElementById('mkt-high').textContent = Number(tk.high24h).toFixed(4);
+  if (tk.low24h != null) document.getElementById('mkt-low').textContent = fmtPx(Number(tk.low24h));
+  if (tk.high24h != null) document.getElementById('mkt-high').textContent = fmtPx(Number(tk.high24h));
   if (tk.vol24h != null) document.getElementById('mkt-vol').textContent = fmtVol(tk.vol24h);
   if (tk.vol_ccy_24h != null) {
     document.getElementById('mkt-amt').textContent = fmtVol(tk.vol_ccy_24h);
@@ -2091,7 +2107,7 @@ function buildCalcDetails(S) {
     cd.position_calc = {
       id: 'position_calc', icon: '⚡', title: '初始建仓',
       formula: '初始建仓 = (网格可用×杠杆×安全系数) / (2×合约面值×标记价)',
-      vars: `网格可用=${gridCap.toFixed(0)}USDT(总权益${totalEq.toFixed(0)}-锁定${reservedCap.toFixed(0)}), 杠杆=${lev}倍, 安全系数=${safetyFactor.toFixed(3)}, 面值=${ctVal}, 标记价=${px.toFixed(4)}`,
+      vars: `网格可用=${gridCap.toFixed(0)}USDT(总权益${totalEq.toFixed(0)}-锁定${reservedCap.toFixed(0)}), 杠杆=${lev}倍, 安全系数=${safetyFactor.toFixed(3)}, 面值=${ctVal}, 标记价=${fmtPx(px)}`,
       result: `原始张数=${raw.toFixed(2)} → 初始建仓=${initC}张, 单边极限=${initC * 2 + 1}张`
     };
   } else {
@@ -2127,7 +2143,7 @@ function buildCalcDetails(S) {
   cd.safety_distance = {
     id: 'safety_distance', icon: '🎯', title: '安全距离',
     formula: '安全距离 = 标记价到最近强平价的距离',
-    vars: `标记价=${px.toFixed(4)}, 多头强平价=${longLiq > 0 ? longLiq.toFixed(4) : '—'}, 空头强平价=${shortLiq > 0 ? shortLiq.toFixed(4) : '—'}`,
+    vars: `标记价=${fmtPx(px)}, 多头强平价=${longLiq > 0 ? fmtPx(longLiq) : '—'}, 空头强平价=${shortLiq > 0 ? fmtPx(shortLiq) : '—'}`,
     result: `多头距=${longDistPct > 0 ? longDistPct.toFixed(2) + '%' : '—'}, 空头距=${shortDistPct > 0 ? shortDistPct.toFixed(2) + '%' : '—'}, 安全距离=${safetyDist}%`
   };
 
@@ -2365,7 +2381,7 @@ function renderOrders(rows) {
   let h = '';
   rows.forEach(o => {
     h += `<tr><td>${o.inst_id || ''}</td><td>${o.time_str || ''}</td><td>${dirTxt(o.side, o.pos_side)}</td>` +
-         `<td class="num">${(o.px || 0).toFixed(2)}</td><td class="num">${o.sz || 0}</td><td class="num">${(o.value || 0).toFixed(2)}</td></tr>`;
+         `<td class="num">${fmtPx(o.px, o.tick_sz)}</td><td class="num">${o.sz || 0}</td><td class="num">${(o.value || 0).toFixed(2)}</td></tr>`;
   });
   tbody.innerHTML = h;
 }
@@ -2446,7 +2462,7 @@ function adjRow(r, showInst) {
     // 混合组里的撤销行：整行文字 PANTONE 272C，用户2026-08-09定
     const mixedCls = (mixed && !dFilled) ? ' adj-mixed-cancel' : '';
     return `<tr class="${rowCls}${mixedCls}">${seqTd}${inst}${timeTd}${typeTd}<td>${dir}</td>` +
-           `<td class="num">${(d.px || 0).toFixed(4)}</td><td class="num">${filledTxt}</td>` +
+           `<td class="num">${fmtPx(d.px, d.tick_sz)}</td><td class="num">${filledTxt}</td>` +
            `<td class="num">${(d.value || 0).toFixed(2)}</td>${feeTd}</tr>`;
   }).join('');
 }
@@ -3174,7 +3190,7 @@ function updatePMResult(kind) {
     h = _pmRow('单笔名义', (sz * ctVal * mark).toFixed(1) + ' USDT', true);
     h += _pmRow('单笔张数', sz + ' 张');
     h += _pmRow('子单价差', (mark > 0 ? (mark * pv / 100).toFixed(2) : '—') + ' USDT', true);
-    h += _pmRow('当前标记价', mark > 0 ? mark.toFixed(2) : '—');
+    h += _pmRow('当前标记价', mark > 0 ? fmtPx(mark) : '—');
     h += _pmRow('合约面值', ctVal + ' ' + (S.inst_id || '').replace('-USDT-SWAP', ''));
   } else if (kind === 'ind') {
     const tp = g('mod-tp_base_pct') || 1.0;

@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
+from formulas.price_precision import px_round  # 价格按交易所 tickSz 对齐
 
 
 @dataclass
@@ -41,6 +42,15 @@ class GridState:
     simulated: bool = False
     ct_val: float = 0.0           # 合约面值（交易所）
     leverage: int = 20
+
+    def _tick_sz_or(self, default: float = 0.0) -> float:
+        """当前合约价格精度 tickSz（交易所下发），供前端对齐显示。查不到返回 default。"""
+        try:
+            from engine.sync import get_inst_tick_sz
+            ts = get_inst_tick_sz(self.inst_id)
+            return ts if ts and ts > 0 else default
+        except Exception:
+            return default
 
     # ── 账户 ──
     total_equity: float = 1000.0  # 总权益（交易所）
@@ -210,9 +220,10 @@ class GridState:
             "margin_mode": self.margin_mode,
             "simulated": self.simulated,
             "ct_val": self.ct_val,
-            "mark_px": round(pos.mark_px, 4),
-            "last_px": round(pos.last_px, 4),
-            "liqPx": round(pos.liqPx, 4),
+            "tick_sz": self._tick_sz_or(0.0),
+            "mark_px": px_round(self.inst_id, pos.mark_px),
+            "last_px": px_round(self.inst_id, pos.last_px),
+            "liqPx": px_round(self.inst_id, pos.liqPx),
             "safety_distance_pct": round(self.safety_distance_pct, 2),
             "total_equity": round(self.total_equity, 2) if self.total_equity is not None else 0.0,
             "reserved_capital": round(self.reserved_capital, 2),
@@ -220,8 +231,8 @@ class GridState:
             "total_pnl": round(self.total_pnl, 2),
             "total_fee": round(getattr(self, "total_fee", 0), 2),
             "grid_count": self.grid_count,
-            "grid_upper_px": round(self.grid_upper_px, 2),
-            "grid_lower_px": round(self.grid_lower_px, 2),
+            "grid_upper_px": px_round(self.inst_id, self.grid_upper_px),
+            "grid_lower_px": px_round(self.inst_id, self.grid_lower_px),
             "pending_iceberg": self.pending_iceberg,
             "net_exposure": pos.long_contracts - pos.short_contracts,
             "total_contracts": pos.long_contracts + pos.short_contracts,
@@ -231,17 +242,17 @@ class GridState:
             "position_margin": round(pos.position_margin, 2),
             "long": {
                 "contracts": pos.long_contracts,
-                "avg_px": round(pos.long_avg_px, 4),
+                "avg_px": px_round(self.inst_id, pos.long_avg_px),
                 "unrealized_pnl": round(pos.long_unrealized_pnl, 2),
-                "liq_px": round(pos.long_liq_px, 4),
-                "be_px": round(pos.long_be_px, 4),
+                "liq_px": px_round(self.inst_id, pos.long_liq_px),
+                "be_px": px_round(self.inst_id, pos.long_be_px),
             },
             "short": {
                 "contracts": pos.short_contracts,
-                "avg_px": round(pos.short_avg_px, 4),
+                "avg_px": px_round(self.inst_id, pos.short_avg_px),
                 "unrealized_pnl": round(pos.short_unrealized_pnl, 2),
-                "liq_px": round(pos.short_liq_px, 4),
-                "be_px": round(pos.short_be_px, 4),
+                "liq_px": px_round(self.inst_id, pos.short_liq_px),
+                "be_px": px_round(self.inst_id, pos.short_be_px),
             },
             "params": {
                 "capital": round(self.grid_available, 2),
@@ -319,8 +330,8 @@ class GridState:
                 "auto_rebuild_blocked": self.auto_rebuild_blocked,
                 "flat_reason": self.flat_reason,
                 "flat_ts": self.flat_ts,
-                "grid_upper_px": round(self.grid_upper_px, 2),
-                "grid_lower_px": round(self.grid_lower_px, 2),
+                "grid_upper_px": px_round(self.inst_id, self.grid_upper_px),
+                "grid_lower_px": px_round(self.inst_id, self.grid_lower_px),
             },
             "adjust_history": self.adjust_history[-20:],
             "calc_details": self.calc_details,
