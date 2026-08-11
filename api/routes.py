@@ -57,10 +57,12 @@ except ImportError:  # pragma: no cover
 try:
     from data.ticker import (
         get_ticker_cache, get_mark_px, get_oi_cache, get_oi_change,
+        get_ticker as _force_ticker_refresh,
         get_client as _get_ticker_client,
     )
 except ImportError:
     get_ticker_cache = get_mark_px = get_oi_cache = get_oi_change = None
+    _force_ticker_refresh = None
     _get_ticker_client = None
 
 # ── data 层：持仓/余额 ──
@@ -589,10 +591,18 @@ def register_routes(app: FastAPI):
 
     # ─── 行情 ───
     @app.get("/api/v1/market")
-    async def get_market():
+    async def get_market(inst_id: str = ""):
+        # 指定 inst_id 时：强制刷新该币行情并写入缓存，确保前端切币能立即拿到数据
+        if inst_id and _force_ticker_refresh is not None:
+            try:
+                _force_ticker_refresh(inst_id)
+            except Exception:
+                pass
         enriched = []
         _available_inst_ids = get_available_inst_ids() if get_available_inst_ids else set()
         for t in get_ticker_cache() or []:
+            if inst_id and t["inst_id"] != inst_id:
+                continue
             if _available_inst_ids and t["inst_id"] not in _available_inst_ids:
                 continue
             item = dict(t)

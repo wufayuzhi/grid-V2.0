@@ -1846,11 +1846,13 @@ function updatePos(side, pos, mark) {
 // ═══════════════════ MARKET DATA ═══════════════════
 async function fetchMarketData(instId) {
   try {
-    const r = await fetch(API_BASE + '/api/v1/market');
+    // 带 inst_id 时后端会强制刷新该币行情，确保切换后立即有数据
+    const q = instId ? '?inst_id=' + encodeURIComponent(instId) : '';
+    const r = await fetch(API_BASE + '/api/v1/market' + q);
     const d = await r.json();
     if (d.data && d.data.tickers) {
       _marketTickers = d.data.tickers;
-      const tk = d.data.tickers.find(t => t.inst_id === instId);
+      const tk = d.data.tickers.find(t => t.inst_id === instId) || d.data.tickers[0];
       if (tk) updateMarketCells(tk);
     }
   } catch (e) { /* 静默 */ }
