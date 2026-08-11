@@ -27,13 +27,31 @@ _atr_last_refresh = 0.0
 _ATR_REFRESH_INTERVAL = 60.0
 
 
+def _clear_residual_stats(st) -> None:
+    """清掉 state 里可能残留的网格/收益统计（切模式时可能带入的模拟盘数据）。
+
+    只清统计快照，不动 total_equity（让正确 client 的 sync_equity 覆盖）和历史记录。
+    清零后 grid_count=0 会触发 backfill_grid_stats 从对应模式订单历史权威重算。
+    """
+    st.grid_count = 0
+    st.total_pnl = 0.0
+    st.total_fee = 0.0
+    st.imbalance_rate = 0.0
+    logger.info("已清空残留网格/收益统计，等待从订单历史权威重算")
+
+
 async def data_loop():
     """异步主循环：延迟后刷新 ticker/OI/持仓余额，触发决策"""
     loop = asyncio.get_event_loop()
-    # 引擎启动时自动回填网格统计(滚动/已实现/手续费，从交易所账单权威计算，幂等)
+    # 引擎启动时自动回填网格统计(滚动/已实现/手续费，从交易所订单历史权威计算)
     try:
         from engine.grid import backfill_grid_stats
-        backfill_grid_stats(get_state())
+        st0 = get_state()
+        # 若 state 里残留了统计但当前账户无成交(grid_count>0 而交易所为空)，
+        # 先清零触发 backfill 从实盘订单历史权威重算(幂等安全，实盘无成交→0)
+        if (st0.grid_count or 0) > 0:
+            _clear_residual_stats(st0)
+        backfill_grid_stats(st0)
     except Exception as e:
         logger.warning(f"启动回填网格统计失败: {e}")
     while True:
