@@ -2505,7 +2505,10 @@ function saveApiKeyModal() {
   fetch(API_BASE + '/api/v1/config/apikey', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ api_key: apikey, api_secret: secret, passphrase: passphrase })
+    body: JSON.stringify({
+      api_key: apikey, api_secret: secret, passphrase: passphrase,
+      mode: S.simulated ? 'simulated' : 'live'
+    })
   }).then(r => r.json()).then(d => {
     if (d.status === 'ok') {
       // 清空输入框，只保留脱敏展示
@@ -2514,6 +2517,7 @@ function saveApiKeyModal() {
       document.getElementById('api-pass-input').value = '';
       closeApiModal();
       updateApiMaskedTag();
+      refresh();   // 保存后联动刷新，确保新 key 数据立即上屏
       alert('API 密钥已保存');
     } else {
       alert('保存失败：' + (d.msg || ''));

@@ -40,7 +40,7 @@ def _safe_float(v, default: float = 0.0) -> float:
 def init_adapter() -> None:
     """初始化公开行情客户端（main.py startup 调用）。"""
     global _pub
-    if _pub is not None:
+    if _pub is not None and _pub.simulated == get_state().simulated:
         return
     st = get_state()
     _pub = RawOkxRestClient(timeout=st.api_timeout or 15, simulated=st.simulated)
@@ -48,9 +48,10 @@ def init_adapter() -> None:
 
 
 def get_client() -> RawOkxRestClient:
-    """获取公开行情客户端（未初始化则初始化）。"""
+    """获取公开行情客户端（未初始化或模式变化则重新初始化）。"""
     global _pub
-    if _pub is None:
+    st = get_state()
+    if _pub is None or _pub.simulated != st.simulated:
         init_adapter()
     assert _pub is not None
     return _pub

@@ -90,6 +90,12 @@ def _trigger_decision():
         refresh_daily_atr(st)
         _atr_last_refresh = now
 
+    # 失衡率实时更新（不依赖运行状态，网格停止也刷新，避免前端残留死值）
+    from formulas.safety import calc_imbalance_rate
+    _p = st.position
+    st.imbalance_rate = round(calc_imbalance_rate(
+        _p.long_contracts, _p.short_contracts), 2)
+
     if not st.running:
         return
 

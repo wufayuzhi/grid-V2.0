@@ -36,6 +36,9 @@ _EQUITY_CCYS = {"USDT", "USDC"}
 # ─── 全局认证客户端 ───
 _auth_client: RawOkxRestClient | None = None
 _auth_ready: bool = False
+# 切模式后待清标志：client 因模式变化重建时置位，
+# sync_positions 空返回时仅当此标志为真才清零（避免正常 API 抖动误清持仓）
+_mode_switch_pending: bool = False
 
 
 def _safe_float(v, default: float = 0.0) -> float:
@@ -94,9 +97,19 @@ def build_auth_client() -> RawOkxRestClient | None:
 
 
 def get_auth_client() -> RawOkxRestClient | None:
-    """获取认证客户端（未构建则尝试构建）。"""
-    if _auth_client is None or not _auth_ready:
+    """获取认证客户端（未构建则尝试构建）。
+
+    模式校验：若当前 client 的 simulated 与 state 当前模式不一致，
+    说明切换了模拟/实盘但 client 未重建 → 强制重建为当前模式。
+    """
+    st = get_state()
+    if (_auth_client is None or not _auth_ready
+            or _auth_client.simulated != st.simulated):
         build_auth_client()
+        # 因模式变化(非首次构建)重建 → 置切模式待清标志
+        if _auth_ready and _auth_client is not None and _auth_client.simulated == st.simulated:
+            global _mode_switch_pending
+            _mode_switch_pending = True
     return _auth_client if _auth_ready else None
 
 
@@ -117,18 +130,16 @@ def _apply_position_to_state(p: dict, st) -> None:
         pos.long_contracts = contracts
         pos.long_avg_px = avg_px
         pos.long_unrealized_pnl = upl
-        if liq_px > 0:
-            pos.long_liq_px = liq_px
-        if be_px > 0:
-            pos.long_be_px = be_px
+        # 无条件写入：实盘 liqPx=0 是合法值(完全对冲无风险)，必须覆盖模拟盘残留假值
+        pos.long_liq_px = liq_px
+        pos.long_be_px = be_px
     elif side == "short":
         pos.short_contracts = contracts
         pos.short_avg_px = avg_px
         pos.short_unrealized_pnl = upl
-        if liq_px > 0:
-            pos.short_liq_px = liq_px
-        if be_px > 0:
-            pos.short_be_px = be_px
+        # 无条件写入：同上
+        pos.short_liq_px = liq_px
+        pos.short_be_px = be_px
     # 通用字段（有值才覆盖）
     if mark_px > 0:
         pos.mark_px = mark_px
@@ -177,8 +188,24 @@ def sync_positions() -> None:
                 {"long": st.position.long_contracts,
                  "short": st.position.short_contracts})
         else:
-            # API 返回空列表：可能是暂时 API 问题或平仓线程刚执行完，保留旧值
-            diag.debug("DATA", "持仓API返回空，保留旧值")
+            # API 返回空列表：可能是暂时 API 问题或平仓线程刚执行完，保留旧值。
+            # 例外：刚切换模式后第一次空返回 → 明确清零（避免实盘界面残留模拟盘持仓）
+            global _mode_switch_pending
+            if _mode_switch_pending:
+                st.position.long_contracts = 0
+                st.position.long_avg_px = 0.0
+                st.position.long_unrealized_pnl = 0.0
+                st.position.long_liq_px = 0
+                st.position.long_be_px = 0
+                st.position.short_contracts = 0
+                st.position.short_avg_px = 0.0
+                st.position.short_unrealized_pnl = 0.0
+                st.position.short_liq_px = 0
+                st.position.short_be_px = 0
+                _mode_switch_pending = False
+                diag.debug("DATA", "切换模式后持仓API返回空 → 已清零残留持仓")
+            else:
+                diag.debug("DATA", "持仓API返回空，保留旧值")
     except Exception as e:
         logger.debug(f"sync_positions: {e}")
         diag.warn("ERROR", f"持仓数据拉取失败: {e}")

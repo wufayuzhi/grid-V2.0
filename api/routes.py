@@ -1439,6 +1439,26 @@ def register_routes(app: FastAPI):
                 refresh_available_instruments()
             except Exception:
                 pass
+        # ── 切换模式清残留账（只清"当前运行快照"，保留历史记录）──
+        # 清持仓：避免实盘界面残留模拟盘持仓，等正确 client sync 拉回实盘真实持仓
+        pos = getattr(st, "position", None)
+        if pos is not None:
+            pos.long_contracts = 0
+            pos.short_contracts = 0
+            pos.long_avg_px = 0.0
+            pos.short_avg_px = 0.0
+            pos.long_unrealized_pnl = 0.0
+            pos.short_unrealized_pnl = 0.0
+            pos.long_liq_px = 0
+            pos.short_liq_px = 0
+            pos.long_be_px = 0
+            pos.short_be_px = 0
+        # 清统计（变0 → 触发 backfill_grid_stats 从对应模式订单历史自动重算）
+        st.grid_count = 0
+        st.total_pnl = 0.0
+        st.total_fee = 0.0
+        st.imbalance_rate = 0.0
+        # total_equity 不清：让正确 client 的 sync_equity 自然覆盖，避免 capital 空窗变 1
         if save_state is not None:
             try:
                 save_state()
@@ -1500,8 +1520,20 @@ def register_routes(app: FastAPI):
                 build_auth_client()
             except Exception:
                 pass
+        # 存 key 后同步重建 data/exchange 与 data/ticker 的 client，
+        # 确保新 key 立即生效于持仓/余额/行情链路
+        try:
+            from data.exchange import build_auth_client as _dex_build
+            _dex_build()
+        except Exception:
+            pass
+        try:
+            from data.ticker import init_adapter as _dtk_init
+            _dtk_init()
+        except Exception:
+            pass
         logger.info(f"API密钥已保存（{mode}）")
-        return {"status": "ok"}
+        return {"status": "ok", "mode": mode}
 
     # ─── 参数 ───
     @app.post("/api/v1/config/params")
