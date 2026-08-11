@@ -305,9 +305,16 @@ class RawOkxRestClient:
         return data[0] if data else {}
 
     def get_position_mode(self) -> str:
-        """获取持仓模式"""
-        data = self._request("GET", "/api/v5/account/position-mode").get("data", [])
-        return data[0].get("posMode", "") if data else ""
+        """获取持仓模式。
+
+        OKX 无 GET /api/v5/account/position-mode 端点（会 404）。
+        持仓模式从 /api/v5/account/config 的 posMode 字段读取。
+        """
+        try:
+            cfg = self.get_account_config()
+            return cfg.get("posMode", "") or ""
+        except Exception:
+            return ""
 
     def set_position_mode(self, pos_mode: str = "long_short_mode") -> dict:
         """设置双向持仓模式"""
