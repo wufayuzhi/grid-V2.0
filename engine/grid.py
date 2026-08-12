@@ -338,7 +338,9 @@ def calc_grid_levels(st) -> tuple[float, float]:
       - 正常(含高失衡+在赚)     → 密度=模式base，bePx夹逼(max/min)
     """
     pos = st.position
-    anchor = pos.last_px if pos.last_px > 0 else pos.mark_px  # 成交价锚，无则回退标记价
+    # 锚点 = 固定锚(grid_anchor_px，建仓=中轴/成交=成交价时设定)，不随市价漂。
+    # 无固定锚(首次/异常)才回退市价(last_px/mark_px)。
+    anchor = st.grid_anchor_px if st.grid_anchor_px > 0 else (pos.last_px if pos.last_px > 0 else pos.mark_px)
 
     imbalance = calc_imbalance_rate(pos.long_contracts, pos.short_contracts)
     heavy, _ = _heavy_side(st)
@@ -445,7 +447,7 @@ def _cancel_orders(st, ord_ids: list) -> None:
             logger.debug(f"撤单 {oid} 异常: {e}")
 
 
-def _verify_filled(client, inst_id: str, ord_ids: list) -> tuple[bool, dict, float]:
+def _verify_filled(client, inst_id: str, ord_ids: list) -> tuple[bool, dict, float, float]:
     """逐个核实 ordId 的真实状态，判断是否真正成交。
 
     背景：grid.py 原判定把"pending 查询结果中缺单/空"直接当"成交"，网络抖动时
@@ -463,18 +465,30 @@ def _verify_filled(client, inst_id: str, ord_ids: list) -> tuple[bool, dict, flo
             o = client.get_order(inst_id, oid)
         except Exception as e:
             logger.warning(f"核实成交状态失败 {oid}: {e} → 本轮跳过，不判定成交")
-            return False, {}, 0
+            return False, {}, 0, 0.0
         stt = (o or {}).get("state", "") if isinstance(o, dict) else ""
         if not stt:
             logger.warning(f"核实成交状态无数据 {oid} → 本轮跳过，不判定成交")
-            return False, {}, 0
+            return False, {}, 0, 0.0
         states[oid] = stt
         try:
             fees += abs(float((o or {}).get("fee") or 0))
         except Exception:
             pass
     filled = all(states.get(oid) == "filled" for oid in ord_ids) if ord_ids else False
-    return filled, states, fees
+    # 汇总成交均价（用最后一笔 filled 单的 avgPx，作为成交后锚点）
+    fill_px = 0.0
+    if filled:
+        for oid in ord_ids:
+            if states.get(oid) == "filled":
+                try:
+                    _o = client.get_order(inst_id, oid)
+                    _px = float((_o or {}).get("avgPx") or 0)
+                    if _px > 0:
+                        fill_px = _px
+                except Exception:
+                    continue
+    return filled, states, fees, fill_px
 
 
 def place_grid_orders(st) -> dict:
@@ -625,7 +639,7 @@ def check_grid_tick(st) -> None:
 
     # 上端可能成交：核实
     if up_missing:
-        filled_up, states_up, fees_up = _verify_filled(client, st.inst_id, up_missing)
+        filled_up, states_up, fees_up, fill_up_px = _verify_filled(client, st.inst_id, up_missing)
         if not filled_up:
             # 无法确认成交（查询失败/仍在挂单/被撤）→ 跳过本轮，记诊断日志，不误撤
             logger.warning(
@@ -643,6 +657,10 @@ def check_grid_tick(st) -> None:
             return
         _log(st, f"🔺 上端成交(平多+开空) → 撤下端, 重挂", cat="GRID")
         _notify_trade(st, "平多/开空", "upper")
+        # 锚点 = 多头成交价（不随市价漂）；记录最近成交时间（12h提醒计时起点）
+        if fill_up_px > 0:
+            st.grid_anchor_px = fill_up_px
+        st.grid_last_trade_ts = time.time()
         # 网格滚动次数+1；锁定上端已实现收益 = N×面值×(挂单价upper−多头开仓均价)
         st.grid_count = (st.grid_count or 0) + 1
         _pnl_up = (_grid_step_contracts(st) * float(st.ct_val or 0)
@@ -660,7 +678,7 @@ def check_grid_tick(st) -> None:
 
     # 下端可能成交：核实
     if lo_missing:
-        filled_lo, states_lo, fees_lo = _verify_filled(client, st.inst_id, lo_missing)
+        filled_lo, states_lo, fees_lo, fill_lo_px = _verify_filled(client, st.inst_id, lo_missing)
         if not filled_lo:
             logger.warning(
                 f"下端单疑似变动但未确认真成交: missing={lo_missing} "
@@ -676,6 +694,10 @@ def check_grid_tick(st) -> None:
             return
         _log(st, f"🔻 下端成交(平空+开多) → 撤上端, 重挂", cat="GRID")
         _notify_trade(st, "平空/开多", "lower")
+        # 锚点 = 空头成交价（不随市价漂）；记录最近成交时间（12h提醒计时起点）
+        if fill_lo_px > 0:
+            st.grid_anchor_px = fill_lo_px
+        st.grid_last_trade_ts = time.time()
         # 网格滚动次数+1；锁定下端已实现收益 = N×面值×(空头开仓均价−挂单价lower)
         st.grid_count = (st.grid_count or 0) + 1
         _pnl_lo = (_grid_step_contracts(st) * float(st.ct_val or 0)
@@ -710,7 +732,8 @@ def _refresh_grid_display(st) -> None:
         # 用当前状态重算挂单价（锚=last_px/mark_px，间距=ATR%×密度，bePx钳制）
         # 与 place_grid_orders 里 calc_grid_levels 同一套逻辑，但静默不推送
         pos = st.position
-        anchor = pos.last_px if pos.last_px > 0 else pos.mark_px
+        # 展示锚也用固定锚，不随市价漂（与 calc_grid_levels 一致）
+        anchor = st.grid_anchor_px if st.grid_anchor_px > 0 else (pos.last_px if pos.last_px > 0 else pos.mark_px)
         atr = getattr(st, "atr_abs", 0.0) or 0.0
         if atr > 0 and anchor > 0:
             spacing = grid_spacing_pct(atr, anchor, _mode_base_density(st))
@@ -728,27 +751,51 @@ def _refresh_grid_display(st) -> None:
 
 
 def _maybe_auto_rehang(st, client, pending_ids) -> None:
-    """24h不成交自动重挂：挂单超过 N 小时仍无成交 → 撤旧单按新参数重挂。
-
-    纯系统行为（不做二次确认）。撤单走 _cancel_orders 安全保险（只撤未成交、
-    只撤本引擎 clOrdId 的单），绝不误撤仓位/别人的单。
-    触发间隔：st.grid_rehang_hours（默认24），st.grid_rehang_cooldown 防反复重挂。
+    """网格挂单超时处理：
+      - 12h 未成交 → 企业微信推送提醒一次（不自动改，等用户决策）
+      - 24h 未成交 → 自动撤单重挂（纯系统行为，不二次确认）
+    计时起点 = 最近一次成交时间 grid_last_trade_ts（每笔成交更新）；从未成交则用挂单时间。
+    撤单走 _cancel_orders 安全保险（只撤未成交、只撤本引擎 clOrdId 的单）。
     """
     if not getattr(st, "auto_adjust", True):
         return
     placed = getattr(st, "grid_placed_ts", 0.0) or 0.0
     if placed <= 0:
         return
+    now = time.time()
+    # 计时起点：最近成交时间，无则用挂单时间
+    ref_ts = (getattr(st, "grid_last_trade_ts", 0.0) or 0.0) or placed
+    elapsed = now - ref_ts
+
+    # 12h 未成交 → 企微推一次（推过不重复；重新成交后 ref_ts 更新会重置计时）
+    if elapsed >= 12 * 3600:
+        last_push = getattr(st, "grid_12h_push_ts", 0.0) or 0.0
+        # 距上次推送 > 11h（新周期）才再推，避免同周期反复刷屏
+        if last_push <= 0 or (now - last_push) > 11 * 3600:
+            try:
+                from notify import notify
+                inst = st.inst_id or ""
+                now_px = st.position.last_px if getattr(st, "position", None) and st.position.last_px > 0 else st.position.mark_px
+                notify("grid_stale",
+                       f"⏰ 网格挂单 {elapsed/3600:.0f}h 未成交",
+                       [f"{inst} 4方向限价单已挂 {elapsed/3600:.0f}h 无成交",
+                        f"当前价: {now_px}  锚点: {st.grid_anchor_px}",
+                        "请确认是否需要调整间距/参数"])
+                st.grid_12h_push_ts = now
+                save_state()
+            except Exception as e:
+                logger.warning(f"12h未成交提醒推送失败: {e}")
+
+    # 24h 未成交 → 自动撤单重挂（纯系统行为，不二次确认）
     hours = float(getattr(st, "grid_rehang_hours", 24.0) or 24.0)
     cooldown = float(getattr(st, "grid_rehang_cooldown", 3600.0) or 3600.0)
-    elapsed = time.time() - placed
     if elapsed < hours * 3600:
         return  # 未到24h
     # 距上次自动重挂不足冷却 → 跳过，防每轮反复重挂
     last_rehang = getattr(st, "grid_last_rehang_ts", 0.0) or 0.0
-    if last_rehang > 0 and (time.time() - last_rehang) < cooldown:
+    if last_rehang > 0 and (now - last_rehang) < cooldown:
         return
-    st.grid_last_rehang_ts = time.time()
+    st.grid_last_rehang_ts = now
     _log(st, f"⏰ 网格挂单超 {hours:.0f}h 未成交 → 自动撤单重挂", cat="GRID")
     try:
         place_grid_orders(st)

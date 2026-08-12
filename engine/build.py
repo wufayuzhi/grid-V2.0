@@ -147,6 +147,8 @@ def execute_start_grid(contracts: int = 0) -> dict:
     st.position.long_avg_px = px
     st.position.short_avg_px = px
     st.position.mark_px = px
+    # 锚点 = 多空开仓均价中轴（建仓多空同价 = px）。此后不随市价漂，成交时才更新。
+    st.grid_anchor_px = px
     st.running = True
     st.grid_count = 0
     st.adjust_records = []

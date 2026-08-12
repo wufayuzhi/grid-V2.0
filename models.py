@@ -70,6 +70,8 @@ class GridState:
     grid_last_rehang_ts: float = 0.0  # 最近一次24h自动重挂时间（冷却防反复）
     grid_rehang_hours: float = 24.0   # 不成交多久自动重挂（小时）
     grid_rehang_cooldown: float = 3600.0  # 自动重挂最小间隔（秒）
+    grid_last_trade_ts: float = 0.0   # 最近一次网格成交时间（12h不成交提醒计时起点）
+    grid_12h_push_ts: float = 0.0     # 12h未成交提醒推送时间（防刷屏）
     grid_count: int = 0
     pending_iceberg: int = 0
 

@@ -66,6 +66,8 @@ def save_state():
         "grid_last_rehang_ts": getattr(st, "grid_last_rehang_ts", 0.0),
         "grid_rehang_hours": getattr(st, "grid_rehang_hours", 24.0),
         "grid_rehang_cooldown": getattr(st, "grid_rehang_cooldown", 3600.0),
+        "grid_last_trade_ts": getattr(st, "grid_last_trade_ts", 0.0),
+        "grid_12h_push_ts": getattr(st, "grid_12h_push_ts", 0.0),
         "last_rebalance_ts": getattr(st, "last_rebalance_ts", 0.0),
         "initial_contracts": st.initial_contracts,
         "single_limit": st.single_limit,
@@ -199,6 +201,8 @@ def load_state() -> GridState:
         st.grid_last_rehang_ts = data.get("grid_last_rehang_ts", 0.0)
         st.grid_rehang_hours = data.get("grid_rehang_hours", 24.0)
         st.grid_rehang_cooldown = data.get("grid_rehang_cooldown", 3600.0)
+        st.grid_last_trade_ts = data.get("grid_last_trade_ts", 0.0)
+        st.grid_12h_push_ts = data.get("grid_12h_push_ts", 0.0)
         st.last_rebalance_ts = data.get("last_rebalance_ts", 0.0)
         st.initial_contracts = data.get("initial_contracts", 0)
         st.single_limit = data.get("single_limit", 0)
