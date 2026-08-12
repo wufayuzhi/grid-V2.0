@@ -65,6 +65,11 @@ class GridState:
     # ── 网格状态 ──
     grid_upper_px: float = 0.0
     grid_lower_px: float = 0.0
+    grid_anchor_px: float = 0.0   # 网格锚点（供前端计算器透明显示）
+    grid_placed_ts: float = 0.0   # 最近一次网格挂单时间戳（24h不成交自动重挂用）
+    grid_last_rehang_ts: float = 0.0  # 最近一次24h自动重挂时间（冷却防反复）
+    grid_rehang_hours: float = 24.0   # 不成交多久自动重挂（小时）
+    grid_rehang_cooldown: float = 3600.0  # 自动重挂最小间隔（秒）
     grid_count: int = 0
     pending_iceberg: int = 0
 
@@ -150,6 +155,10 @@ class GridState:
     dr_7d: float = 0.0
     atr_abs: float = 0.0          # 真实波幅ATR（绝对价，日线TR均值，网格间距用）
     atr_pct: float = 0.0          # ATR相对当前价百分比
+    atr_pct_prev: float = 0.0     # 上一次ATR%（ATR剧烈变化推送用）
+    atr_last_push_ts: float = 0.0  # 上次ATR变化推送时间（防刷屏）
+    atr_notify_change_pct: float = 30.0  # ATR变化推送阈值(%)
+    atr_notify_cooldown: float = 21600.0  # ATR推送最小间隔(秒, 默认6h)
 
     # ── 网格挂单追踪（事件驱动成交检测）──
     grid_upper_ord_ids: list = field(default_factory=list)   # 上端组(平多+开空) ordId

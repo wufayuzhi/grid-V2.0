@@ -56,8 +56,16 @@ def save_state():
         "last_px": px_round(st.inst_id, st.position.last_px),
         "atr_abs": st.atr_abs,
         "atr_pct": st.atr_pct,
+        "atr_pct_prev": getattr(st, "atr_pct_prev", 0.0),
+        "atr_last_push_ts": getattr(st, "atr_last_push_ts", 0.0),
+        "atr_notify_change_pct": getattr(st, "atr_notify_change_pct", 30.0),
+        "atr_notify_cooldown": getattr(st, "atr_notify_cooldown", 21600.0),
         "grid_upper_ord_ids": st.grid_upper_ord_ids[-20:],
         "grid_lower_ord_ids": st.grid_lower_ord_ids[-20:],
+        "grid_placed_ts": getattr(st, "grid_placed_ts", 0.0),
+        "grid_last_rehang_ts": getattr(st, "grid_last_rehang_ts", 0.0),
+        "grid_rehang_hours": getattr(st, "grid_rehang_hours", 24.0),
+        "grid_rehang_cooldown": getattr(st, "grid_rehang_cooldown", 3600.0),
         "last_rebalance_ts": getattr(st, "last_rebalance_ts", 0.0),
         "initial_contracts": st.initial_contracts,
         "single_limit": st.single_limit,
@@ -181,8 +189,16 @@ def load_state() -> GridState:
         st.position.last_px = data.get("last_px", 0)
         st.atr_abs = data.get("atr_abs", 0)
         st.atr_pct = data.get("atr_pct", 0)
+        st.atr_pct_prev = data.get("atr_pct_prev", 0.0)
+        st.atr_last_push_ts = data.get("atr_last_push_ts", 0.0)
+        st.atr_notify_change_pct = data.get("atr_notify_change_pct", 30.0)
+        st.atr_notify_cooldown = data.get("atr_notify_cooldown", 21600.0)
         st.grid_upper_ord_ids = data.get("grid_upper_ord_ids", [])
         st.grid_lower_ord_ids = data.get("grid_lower_ord_ids", [])
+        st.grid_placed_ts = data.get("grid_placed_ts", 0.0)
+        st.grid_last_rehang_ts = data.get("grid_last_rehang_ts", 0.0)
+        st.grid_rehang_hours = data.get("grid_rehang_hours", 24.0)
+        st.grid_rehang_cooldown = data.get("grid_rehang_cooldown", 3600.0)
         st.last_rebalance_ts = data.get("last_rebalance_ts", 0.0)
         st.initial_contracts = data.get("initial_contracts", 0)
         st.single_limit = data.get("single_limit", 0)

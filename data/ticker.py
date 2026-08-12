@@ -185,10 +185,42 @@ def refresh_daily_atr(st=None) -> float:
         st.atr_abs = atr
         mark = st.position.mark_px
         st.atr_pct = atr / mark * 100 if mark > 0 else 0.0
+        _maybe_notify_atr_change(st, prev_pct=getattr(st, "atr_pct_prev", 0.0), new_pct=st.atr_pct)
+        st.atr_pct_prev = st.atr_pct
         return atr
     except Exception as e:
         logger.warning(f"refresh_daily_atr: {e}")
         return 0.0
+
+
+def _maybe_notify_atr_change(st, prev_pct, new_pct) -> None:
+    """ATR剧烈变化 → 企微推送（供人工决策是否调密度/间距）。
+
+    阈值 = st.atr_notify_change_pct（默认 30%），表示 ATR% 相对上次变化超过此比例才推送。
+    防刷屏：距上次推送不足 st.atr_notify_cooldown（默认 6h）则跳过。
+    只推送不动仓、不改参数。
+    """
+    if prev_pct <= 0 or new_pct <= 0:
+        return
+    threshold = float(getattr(st, "atr_notify_change_pct", 30.0) or 30.0)
+    # 变化比例：以旧值为基准的相对变化 |新-旧|/旧*100
+    change_pct = abs(new_pct - prev_pct) / prev_pct * 100
+    if change_pct < threshold:
+        return
+    cooldown = float(getattr(st, "atr_notify_cooldown", 6 * 3600.0) or 6 * 3600.0)
+    last = getattr(st, "atr_last_push_ts", 0.0) or 0.0
+    if last > 0 and (time.time() - last) < cooldown:
+        return
+    st.atr_last_push_ts = time.time()
+    direction = "↑" if new_pct > prev_pct else "↓"
+    try:
+        from notify import notify
+        notify("atr", "📊 ATR波动变化",
+               [f"ATR% {prev_pct:.2f}% → {new_pct:.2f}% ({direction}{change_pct:.0f}%)",
+                f"币种 {st.inst_id} | 密度 {getattr(st,'current_density','—')} | 间距 {getattr(st,'grid_spacing_pct','—')}%",
+                "请人工判断是否需要调整网格密度/间距"])
+    except Exception as e:
+        logger.warning(f"notify_atr_change: {e}")
 
 
 # ═══ OI（持仓量）═══

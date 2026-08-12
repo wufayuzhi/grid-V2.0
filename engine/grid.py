@@ -399,6 +399,7 @@ def calc_grid_levels(st) -> tuple[float, float]:
     st.grid_upper_px = px_round(st.inst_id, upper)
     st.grid_lower_px = px_round(st.inst_id, lower)
     st.current_density = round(density, 3)
+    st.grid_anchor_px = px_round(st.inst_id, anchor)  # 锚点（供前端计算器透明显示）
     st.emergency_state = emergency
     st.heavy_side = heavy
     st.heavy_state = heavy_state
@@ -406,7 +407,12 @@ def calc_grid_levels(st) -> tuple[float, float]:
 
 
 def _cancel_orders(st, ord_ids: list) -> None:
-    """按 ordId 精确撤销剩余网格单（不误伤其它单）。"""
+    """按 ordId 精确撤销剩余网格单（不误伤其它单）。
+
+    撤单安全保险：撤单前逐单查交易所真实状态，只撤「未成交(live)」的挂单；
+    已成交(filled)已进仓位、已撤(canceled)、查询失败/无数据 → 全部跳过，绝不撤。
+    交易所语义：当前委托（未成交挂单）可撤；当前仓位（已成交）不可撤、也不该撤。
+    """
     if not ord_ids:
         return
     from data.exchange import get_auth_client
@@ -414,6 +420,25 @@ def _cancel_orders(st, ord_ids: list) -> None:
     if client is None:
         return
     for oid in ord_ids:
+        try:
+            o = client.get_order(st.inst_id, oid)
+        except Exception as e:
+            logger.debug(f"撤单前查状态 {oid} 异常: {e} → 跳过，不撤")
+            continue
+        if not isinstance(o, dict):
+            logger.debug(f"撤单跳过 {oid}（查询无数据）")
+            continue
+        state = o.get("state", "")
+        # 身份校验（自愈认领冲突解决）：只撤带本引擎 clOrdId 标记的单，
+        # 无标记（另一实例/手动/幽灵单）绝不撤，避免误撤别人挂的单
+        cloid = str(o.get("clOrdId", ""))
+        if not cloid.startswith(_CLORDID_PREFIX):
+            logger.debug(f"撤单跳过 {oid}（clOrdId={cloid!r} 非本引擎，不撤）")
+            continue
+        # 只撤未成交(live)的挂单；已成交/已撤/状态未知一律跳过
+        if state and state != "live":
+            logger.debug(f"撤单跳过 {oid}（state={state}，非未成交，绝不撤）")
+            continue
         try:
             client.cancel_order(st.inst_id, oid)
         except Exception as e:
@@ -542,6 +567,7 @@ def place_grid_orders(st) -> dict:
                 lower_ids.append(oid)
     st.grid_upper_ord_ids = upper_ids
     st.grid_lower_ord_ids = lower_ids
+    st.grid_placed_ts = time.time()   # 记录挂单时间（24h不成交自动重挂用）
     save_state()
     _log(st, f"📊 挂单: 上{upper:.1f}(平多+开空)/下{lower:.1f}(平空+开多) 各{n}张"
              f" (密度{getattr(st, 'current_density', 2.0)}, 单向={one_way})",
@@ -665,4 +691,36 @@ def check_grid_tick(st) -> None:
         place_grid_orders(st)
         return
 
-    # 两侧都在挂单等待中，什么都不做
+    # 两侧都在挂单等待中，什么都不做（除非超时未成交 → 自动重挂）
+    # 改动7：24h不成交自动重挂（系统自动做，不二次确认；撤单走安全保险只撤未成交单）
+    _maybe_auto_rehang(st, client, pending_ids)
+    return
+
+
+def _maybe_auto_rehang(st, client, pending_ids) -> None:
+    """24h不成交自动重挂：挂单超过 N 小时仍无成交 → 撤旧单按新参数重挂。
+
+    纯系统行为（不做二次确认）。撤单走 _cancel_orders 安全保险（只撤未成交、
+    只撤本引擎 clOrdId 的单），绝不误撤仓位/别人的单。
+    触发间隔：st.grid_rehang_hours（默认24），st.grid_rehang_cooldown 防反复重挂。
+    """
+    if not getattr(st, "auto_adjust", True):
+        return
+    placed = getattr(st, "grid_placed_ts", 0.0) or 0.0
+    if placed <= 0:
+        return
+    hours = float(getattr(st, "grid_rehang_hours", 24.0) or 24.0)
+    cooldown = float(getattr(st, "grid_rehang_cooldown", 3600.0) or 3600.0)
+    elapsed = time.time() - placed
+    if elapsed < hours * 3600:
+        return  # 未到24h
+    # 距上次自动重挂不足冷却 → 跳过，防每轮反复重挂
+    last_rehang = getattr(st, "grid_last_rehang_ts", 0.0) or 0.0
+    if last_rehang > 0 and (time.time() - last_rehang) < cooldown:
+        return
+    st.grid_last_rehang_ts = time.time()
+    _log(st, f"⏰ 网格挂单超 {hours:.0f}h 未成交 → 自动撤单重挂", cat="GRID")
+    try:
+        place_grid_orders(st)
+    except Exception as e:
+        _log(st, f"⚠ 24h自动重挂失败: {e}", level="ERROR", cat="GRID")

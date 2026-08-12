@@ -279,6 +279,12 @@ def _state_dict(st):
         "adj_ratio": getattr(st, "adj_ratio", 0.06),
         "grid_upper_px": px_round(getattr(st, "inst_id", ""), getattr(st, "grid_upper_px", 0.0)),
         "grid_lower_px": px_round(getattr(st, "inst_id", ""), getattr(st, "grid_lower_px", 0.0)),
+        # 网格计算透明化（供前端计算器读真实值，替代写死残留）
+        "atr_pct": round(float(getattr(st, "atr_pct", 0.0) or 0.0), 3),
+        "atr_abs": round(float(getattr(st, "atr_abs", 0.0) or 0.0), 8),
+        "grid_spacing_pct": round(float(getattr(st, "grid_spacing_pct", 0.0) or 0.0), 3),
+        "current_density": round(float(getattr(st, "current_density", 0.0) or 0.0), 3),
+        "grid_anchor_px": round(float(getattr(st, "grid_anchor_px", 0.0) or 0.0), 8),
     }
     d["adjust_history"] = getattr(st, "adjust_history", [])[-20:]
     d["calc_details"] = getattr(st, "calc_details", {})
@@ -1625,6 +1631,20 @@ def register_routes(app: FastAPI):
                         calc_recalc = True
         if calc_recalc:
             _recalc_formula_details(st)
+        # 改动6：网格间距相关参数变化 → 保存后立即撤单重挂（撤单已带安全保险）
+        # 触发条件：网格密度/调仓比例/ATR/单向阈值等影响挂单价的参数变了，且引擎运行中
+        grid_params = {"adj_ratio", "base_density", "defense_density", "density_min",
+                       "atr_timeframe", "atr_period", "one_way_threshold",
+                       "ladder_rates", "ladder_densities"}
+        grid_changed = any(k in req for k in grid_params)
+        if grid_changed:
+            try:
+                from engine.grid import place_grid_orders
+                if getattr(st, "running", False) and not getattr(st, "paused", False):
+                    place_grid_orders(st)
+                    _add_log(st, "⚙ 网格参数已更新 → 已撤旧单并按新参数重挂", cat="PARAM")
+            except Exception as e:
+                _add_log(st, f"⚠ 参数更新后重挂失败: {e}", level="ERROR", cat="PARAM")
         _add_log(st, "⚙ 参数已更新", cat="PARAM")
         if save_state is not None:
             try:
