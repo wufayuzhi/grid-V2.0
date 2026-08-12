@@ -201,7 +201,15 @@ def _state_dict(st):
     """返回 state 契约字典：优先 st.to_dict()（契约已实现），缺失时兜底组装。"""
     if hasattr(st, "to_dict"):
         try:
-            return st.to_dict()
+            d = st.to_dict()
+            # 把 params 里的展示字段提一层到顶层，兼容前端两种读法
+            # （前端计算器读 S.atr_pct 等顶层；params 是后端既有契约层级）
+            p = d.get("params", {}) or {}
+            for _k in ("atr_pct", "atr_abs", "grid_spacing_pct", "current_density",
+                       "grid_anchor_px", "grid_upper_px", "grid_lower_px"):
+                if _k in p:
+                    d[_k] = p[_k]
+            return d
         except Exception:
             pass
     # ── 兜底：按字段名组装（契约字段名保持一致）──
