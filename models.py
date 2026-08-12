@@ -330,6 +330,8 @@ class GridState:
                 "st_mult": getattr(self, "st_mult", None),
                 "oi_n": getattr(self, "oi_n", None),
                 "current_density": getattr(self, "current_density", None),
+                "grid_spacing_pct": round(float(getattr(self, "grid_spacing_pct", 0.0) or 0.0), 3),
+                "grid_anchor_px": round(float(getattr(self, "grid_anchor_px", 0.0) or 0.0), 8),
                 "emergency_state": getattr(self, "emergency_state", None),
                 "heavy_side": getattr(self, "heavy_side", None),
                 "heavy_state": getattr(self, "heavy_state", None),

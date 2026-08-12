@@ -694,7 +694,37 @@ def check_grid_tick(st) -> None:
     # 两侧都在挂单等待中，什么都不做（除非超时未成交 → 自动重挂）
     # 改动7：24h不成交自动重挂（系统自动做，不二次确认；撤单走安全保险只撤未成交单）
     _maybe_auto_rehang(st, client, pending_ids)
+    # 每 tick 刷新展示字段（ATR%/密度/间距/挂单价），清除旧残留，前端永远显示当前真实值
+    _refresh_grid_display(st)
     return
+
+
+def _refresh_grid_display(st) -> None:
+    """轻量刷新网格展示字段，供前端计算器读真实值。
+
+    只更新 st 上的展示字段（atr_pct/spacing/density/upper/lower/anchor），
+    不调交易所、不挂单、不撤单、不推送 —— 纯本地计算，无交易副作用。
+    修复：挂单价/ATR%/密度/间距之前只在重挂时更新，残留旧值(如round(2)的0.01)。
+    """
+    try:
+        # 用当前状态重算挂单价（锚=last_px/mark_px，间距=ATR%×密度，bePx钳制）
+        # 与 place_grid_orders 里 calc_grid_levels 同一套逻辑，但静默不推送
+        pos = st.position
+        anchor = pos.last_px if pos.last_px > 0 else pos.mark_px
+        atr = getattr(st, "atr_abs", 0.0) or 0.0
+        if atr > 0 and anchor > 0:
+            spacing = grid_spacing_pct(atr, anchor, _mode_base_density(st))
+        else:
+            spacing = getattr(st, "target_spacing_pct", 0.6) or 0.6
+        upper = anchor * (1 + spacing / 100)
+        lower = anchor * (1 - spacing / 100)
+        st.grid_spacing_pct = round(spacing, 2)
+        st.grid_upper_px = px_round(st.inst_id, upper)
+        st.grid_lower_px = px_round(st.inst_id, lower)
+        st.current_density = round(_mode_base_density(st), 3)
+        st.grid_anchor_px = px_round(st.inst_id, anchor)
+    except Exception as e:
+        logger.debug(f"_refresh_grid_display: {e}")
 
 
 def _maybe_auto_rehang(st, client, pending_ids) -> None:
