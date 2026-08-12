@@ -604,8 +604,9 @@ def place_grid_orders(st) -> dict:
         from notify import on_op
         mode = "单向(重仓" + ("多" if one_way and heavy == "long" else "空") + ")" if one_way and heavy is not None else "双向"
         on_op("📊 网格挂单", "\n".join([
-            f"{inst} 上 {px_round(inst, upper)}(平多+开空) {n}张",
-            f"      下 {px_round(inst, lower)}(平空+开多) {n}张",
+            f"{inst}",
+            f"上 {px_round(inst, upper)} (平多+开空) {n}张",
+            f"下 {px_round(inst, lower)} (平空+开多) {n}张",
             f"密度{getattr(st, 'current_density', 2.0)} · {mode}",
         ]))
     except Exception:
