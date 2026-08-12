@@ -3159,23 +3159,28 @@ function updatePMResult(kind) {
   if (kind === 'grid') {
     // 读后端返回的真实计算值（替代写死残留 target_spacing_pct）
     const atrPct = S.atr_pct > 0 ? S.atr_pct : 0;           // ATR% （如 1.55 = 1.55%）
-    const realSpacing = S.grid_spacing_pct > 0 ? S.grid_spacing_pct : 0;  // 实际间距%（如 3.1 = 3.1%）
-    const density = S.current_density > 0 ? S.current_density : 0;        // 当前密度
+    const realSpacing = S.grid_spacing_pct > 0 ? S.grid_spacing_pct : 0;  // 实际间距%（后端当前值）
     const adj = g('mod-adj_ratio') || (S.adj_ratio || 0.06); // 调仓比例（滑块优先，回退后端）
+    // 密度：滑块实时值优先（拖动实时预览），未拖则回退后端当前密度
+    const denEl = document.getElementById('mod-base_density');
+    const density = (denEl && denEl.value && parseFloat(denEl.value) > 0)
+      ? parseFloat(denEl.value) : (S.current_density > 0 ? S.current_density : 0);
     const anchor = S.grid_anchor_px > 0 ? S.grid_anchor_px
       : ((lAvg > 0 || sAvg > 0) ? (((lAvg + sAvg) / 2) || mark) : (mark || 0)); // 锚点
-    // 上下挂单价：优先用引擎真实挂单价，无则按真实间距从锚点算
-    const up = S.grid_upper_px > 0 ? S.grid_upper_px
-      : (anchor > 0 && realSpacing > 0 ? anchor * (1 + realSpacing / 100) : 0);
-    const dn = S.grid_lower_px > 0 ? S.grid_lower_px
-      : (anchor > 0 && realSpacing > 0 ? anchor * (1 - realSpacing / 100) : 0);
+    // 实际间距：ATR% × 密度（滑块密度实时算预览；滑块未动用后端值）
+    const spacing = (atrPct > 0 && density > 0)
+      ? (atrPct * density)          // 文档公式：间距 = ATR% × 密度
+      : realSpacing;
+    // 上下挂单价：按实时间距从锚点算（拖密度立即预览新挂单价）
+    const up = (anchor > 0 && spacing > 0) ? anchor * (1 + spacing / 100) : S.grid_upper_px || 0;
+    const dn = (anchor > 0 && spacing > 0) ? anchor * (1 - spacing / 100) : S.grid_lower_px || 0;
     // 调仓量 = max(int(总张数 × 调仓比例 ÷ 2), 1)  （正确公式：总张数的一半）
     const total = lC + sC;
     const stepN = total > 0 && adj > 0 ? Math.max(Math.floor(total * adj / 2), 1) : 0;
     h = _pmRow('ATR% (近' + (S.atr_period || 24) + '根' + (S.atr_timeframe || '1H') + ')',
         atrPct > 0 ? atrPct.toFixed(2) + '%' : '—');
     h += _pmRow('当前网格密度', density > 0 ? density.toFixed(2) : '—');
-    h += _pmRow('实际挂单间隔', realSpacing > 0 ? realSpacing.toFixed(2) + '%' : '—');
+    h += _pmRow('实际挂单间隔', spacing > 0 ? spacing.toFixed(2) + '%' : '—');
     h += _pmRow('均价中轴锚点', anchor > 0 ? anchor.toFixed(6) : '—');
     h += _pmRow('上方挂单价', up > 0 ? up.toFixed(6) : '—', true);
     h += _pmRow('下方挂单价', dn > 0 ? dn.toFixed(6) : '—', true);
