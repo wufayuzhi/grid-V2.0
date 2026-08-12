@@ -95,6 +95,12 @@ def _grid_step_contracts(st) -> int:
 def _notify_trade(st, desc, side):
     """成交后推送(平多/开空 或 平空/开多)。只读, 异常不影响交易。"""
     try:
+        # 先重拉交易所余额, 推送成交后的真实权益(成交当轮 total_equity 还是旧值)
+        try:
+            from data.exchange import sync_equity
+            sync_equity()
+        except Exception:
+            pass
         from notify import on_trade
         pos = st.position
         px = getattr(st, f"grid_{side}_px", 0) or 0
@@ -593,6 +599,17 @@ def place_grid_orders(st) -> dict:
          data={"upper": upper, "lower": lower, "n": n,
                "upper_ids": upper_ids, "lower_ids": lower_ids,
                "density": getattr(st, "current_density", 2.0), "one_way": one_way})
+    # 挂单成功后 → 企微推送挂单价/张数（只读, 异常不影响挂单）
+    try:
+        from notify import on_op
+        mode = "单向(重仓" + ("多" if one_way and heavy == "long" else "空") + ")" if one_way and heavy is not None else "双向"
+        on_op("📊 网格挂单", "\n".join([
+            f"{inst} 上 {px_round(inst, upper)}(平多+开空) {n}张",
+            f"      下 {px_round(inst, lower)}(平空+开多) {n}张",
+            f"密度{getattr(st, 'current_density', 2.0)} · {mode}",
+        ]))
+    except Exception:
+        pass
     return {"status": "ok", "data": {"upper": upper, "lower": lower, "n": n}}
 
 
