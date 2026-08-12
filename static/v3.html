@@ -2380,19 +2380,20 @@ async function fetchOrders() {
   } catch (e) { /* 静默 */ }
 }
 // ── K线限价委托线（复刻交易所：多单红/空单绿 水平线+限价标签）──
+// 只取"开仓方向"单（买开多/卖开空），跟交易所"限价N"口径一致（不含平仓单）
 function drawLimitLines(rows) {
   if (!series || !window.LightweightCharts) return;
   const arr = rows || window._lastOrders || [];
-  const buy = arr.filter(o => o.side === 'buy');
-  const sell = arr.filter(o => o.side === 'sell');
-  const buyPx = buy.length ? (buy[0].px || 0) : 0;      // 买开多/平空 委托价
-  const sellPx = sell.length ? (sell[0].px || 0) : 0;   // 卖开空/平多 委托价
-  const buySz = buy.reduce((a, o) => a + (o.sz || 0), 0);
-  const sellSz = sell.reduce((a, o) => a + (o.sz || 0), 0);
+  const openLong  = arr.filter(o => o.side === 'buy'  && o.pos_side === 'long');  // 买开多
+  const openShort = arr.filter(o => o.side === 'sell' && o.pos_side === 'short'); // 卖开空
+  const buyPx  = openLong.length  ? (openLong[0].px || 0) : 0;
+  const sellPx = openShort.length ? (openShort[0].px || 0) : 0;
+  const buySz  = openLong.reduce((a, o) => a + (o.sz || 0), 0);
+  const sellSz = openShort.reduce((a, o) => a + (o.sz || 0), 0);
   // 先移除旧线
   if (series.limitLong) { try { series.removePriceLine(series.limitLong); } catch(_) {} series.limitLong = null; }
   if (series.limitShort) { try { series.removePriceLine(series.limitShort); } catch(_) {} series.limitShort = null; }
-  // 多单(买)委托线 → 红；空单(卖)委托线 → 绿
+  // 多单(买开多)委托线 → 红；空单(卖开空)委托线 → 绿
   if (buyPx > 0)  series.limitLong  = series.createPriceLine({ price: buyPx,  color: '#EF4444', lineWidth: 1, lineStyle: window.LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: '限价 ' + buySz });
   if (sellPx > 0) series.limitShort = series.createPriceLine({ price: sellPx, color: '#10B981', lineWidth: 1, lineStyle: window.LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: '限价 ' + sellSz });
 }
