@@ -1203,7 +1203,22 @@ def register_routes(app: FastAPI):
             if r.get("status") == "ok":
                 try:
                     from notify import on_op
-                    on_op("🔨 建仓/启动", f"{contracts}张")
+                    st = get_state()
+                    inst = getattr(st, "inst_id", "")
+                    ct = r.get("data", {}).get("contracts", contracts)
+                    cap_before = getattr(st, "capital", 0) or 0          # 建仓前总权益(本金基准, build.py 锁定)
+                    eq_after = getattr(st, "total_equity", 0) or 0       # 开完仓后权益(sync_equity 刷新)
+                    reserved = getattr(st, "reserved_capital", 0) or 0
+                    fee = max(cap_before - eq_after, 0) if cap_before and eq_after else 0
+                    lines = [
+                        f"{inst} 多{ct}张/空{ct}张",
+                        f"建仓前总权益 {cap_before:.2f} USDT",
+                        f"开完仓后权益 {eq_after:.2f} USDT",
+                        f"预留 {reserved:.2f} · 网格可用 {max(cap_before - reserved, 0):.2f}",
+                    ]
+                    if fee > 0:
+                        lines.append(f"开仓手续费 ≈ {fee:.2f} USDT")
+                    on_op("🔨 建仓/启动", "\n".join(lines))
                 except Exception:
                     pass
             return r
@@ -1256,10 +1271,25 @@ def register_routes(app: FastAPI):
         st.running = False
         try:
             from engine.flat import execute_emergency
+            eq_before = getattr(st, "total_equity", 0) or 0          # 全平前权益快照
+            l_before = st.position.long_contracts or 0
+            s_before = st.position.short_contracts or 0
             await asyncio.to_thread(execute_emergency, st, "手动全平")
             try:
+                # 全平后重拉交易所余额, 拿平仓后真实权益
+                from data.exchange import sync_equity
+                try: await asyncio.to_thread(sync_equity)
+                except Exception: pass
+                eq_after = getattr(st, "total_equity", 0) or 0
+                inst = getattr(st, "inst_id", "")
+                fee = max(eq_before - eq_after, 0) if eq_before and eq_after else 0
+                lines = [f"{inst} 平多{l_before}+平空{s_before}",
+                         f"平仓前权益 {eq_before:.2f} USDT",
+                         f"平仓后权益 {eq_after:.2f} USDT"]
+                if fee > 0:
+                    lines.append(f"平仓手续费 ≈ {fee:.2f} USDT")
                 from notify import on_op
-                on_op("💥 全平(手动)")
+                on_op("💥 全平(手动)", "\n".join(lines))
             except Exception:
                 pass
         except Exception as e:

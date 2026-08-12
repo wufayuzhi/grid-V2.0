@@ -39,6 +39,9 @@ def _full_flat(st, reason: str, block_rebuild: bool = False):
     """
     from engine.flat import execute_emergency
     try:
+        eq_before = getattr(st, "total_equity", 0) or 0          # 全平前权益快照
+        l_before = st.position.long_contracts or 0
+        s_before = st.position.short_contracts or 0
         r = execute_emergency(st, reason)
         if r.get("status") == "ok":
             st.flat_reason = reason
@@ -48,6 +51,22 @@ def _full_flat(st, reason: str, block_rebuild: bool = False):
             _log(st, f"🏁 [全平] {reason} 完成" +
                  ("（熔断保护·禁自动重建）" if block_rebuild else "（可重建）"),
                  cat="RISK")
+            # 自动全平 → 企微推送权益信息（重拉交易所余额拿平仓后真实权益）
+            try:
+                from data.exchange import sync_equity
+                sync_equity()
+                eq_after = getattr(st, "total_equity", 0) or 0
+                inst = getattr(st, "inst_id", "")
+                fee = max(eq_before - eq_after, 0) if eq_before and eq_after else 0
+                lines = [f"{inst} 平多{l_before}+平空{s_before}",
+                         f"平仓前权益 {eq_before:.2f} USDT",
+                         f"平仓后权益 {eq_after:.2f} USDT"]
+                if fee > 0:
+                    lines.append(f"平仓手续费 ≈ {fee:.2f} USDT")
+                from notify import on_op
+                on_op(f"🏁 [全平] {reason}", "\n".join(lines))
+            except Exception:
+                pass
         else:
             _log(st, f"⚠️ [全平] {reason} 执行失败: {r.get('msg','')}", level="ERROR", cat="RISK")
     except Exception as e:
