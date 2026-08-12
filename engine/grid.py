@@ -338,9 +338,14 @@ def calc_grid_levels(st) -> tuple[float, float]:
       - 正常(含高失衡+在赚)     → 密度=模式base，bePx夹逼(max/min)
     """
     pos = st.position
-    # 锚点 = 固定锚(grid_anchor_px，建仓=中轴/成交=成交价时设定)，不随市价漂。
-    # 无固定锚(首次/异常)才回退市价(last_px/mark_px)。
-    anchor = st.grid_anchor_px if st.grid_anchor_px > 0 else (pos.last_px if pos.last_px > 0 else pos.mark_px)
+    # 锚点 = 固定锚(grid_anchor_px，建仓=中轴/成交=成交价时设定)，绝不随市价漂。
+    # 无固定锚(旧仓未设/首次)才回退多空开仓均价中轴(成本锚)，绝不用 last_px/mark_px 市价。
+    if st.grid_anchor_px > 0:
+        anchor = st.grid_anchor_px
+    else:
+        la = pos.long_avg_px or 0.0
+        sa = pos.short_avg_px or 0.0
+        anchor = (la + sa) / 2 if (la > 0 and sa > 0) else (pos.last_px or pos.mark_px)
 
     imbalance = calc_imbalance_rate(pos.long_contracts, pos.short_contracts)
     heavy, _ = _heavy_side(st)
@@ -401,7 +406,7 @@ def calc_grid_levels(st) -> tuple[float, float]:
     st.grid_upper_px = px_round(st.inst_id, upper)
     st.grid_lower_px = px_round(st.inst_id, lower)
     st.current_density = round(density, 3)
-    st.grid_anchor_px = px_round(st.inst_id, anchor)  # 锚点（供前端计算器透明显示）
+    # 注意：不写 st.grid_anchor_px —— 锚点只允许在 建仓/成交 时更新，防被挂单循环污染成市价。
     st.emergency_state = emergency
     st.heavy_side = heavy
     st.heavy_state = heavy_state
@@ -606,6 +611,15 @@ def check_grid_tick(st) -> None:
     if client is None:
         return
 
+    # 锚点自愈：若固定锚尚未设定(旧仓/历史持仓)，用多空开仓均价中轴补上(成本锚，绝不用市价)。
+    # 一旦设了，就只允许在 建仓/成交 时更新，绝不随市价漂。
+    if st.grid_anchor_px <= 0:
+        _la = st.position.long_avg_px or 0.0
+        _sa = st.position.short_avg_px or 0.0
+        if _la > 0 and _sa > 0:
+            st.grid_anchor_px = (_la + _sa) / 2
+            save_state()
+
     try:
         pending = client.get_orders_pending(st.inst_id) or []
     except Exception as e:
@@ -729,11 +743,16 @@ def _refresh_grid_display(st) -> None:
     修复：挂单价/ATR%/密度/间距之前只在重挂时更新，残留旧值(如round(2)的0.01)。
     """
     try:
-        # 用当前状态重算挂单价（锚=last_px/mark_px，间距=ATR%×密度，bePx钳制）
+        # 用当前状态重算挂单价（锚=固定锚或成本中轴，间距=ATR%×密度，bePx钳制）
         # 与 place_grid_orders 里 calc_grid_levels 同一套逻辑，但静默不推送
         pos = st.position
-        # 展示锚也用固定锚，不随市价漂（与 calc_grid_levels 一致）
-        anchor = st.grid_anchor_px if st.grid_anchor_px > 0 else (pos.last_px if pos.last_px > 0 else pos.mark_px)
+        # 展示锚 = 固定锚；无则用多空开仓均价中轴(成本锚)。只读展示，绝不写回 grid_anchor_px。
+        if st.grid_anchor_px > 0:
+            anchor = st.grid_anchor_px
+        else:
+            la = pos.long_avg_px or 0.0
+            sa = pos.short_avg_px or 0.0
+            anchor = (la + sa) / 2 if (la > 0 and sa > 0) else (pos.last_px or pos.mark_px)
         atr = getattr(st, "atr_abs", 0.0) or 0.0
         if atr > 0 and anchor > 0:
             spacing = grid_spacing_pct(atr, anchor, _mode_base_density(st))
@@ -745,7 +764,7 @@ def _refresh_grid_display(st) -> None:
         st.grid_upper_px = px_round(st.inst_id, upper)
         st.grid_lower_px = px_round(st.inst_id, lower)
         st.current_density = round(_mode_base_density(st), 3)
-        st.grid_anchor_px = px_round(st.inst_id, anchor)
+        # 注意：这里不写 st.grid_anchor_px —— 锚点只允许在 建仓/成交 时更新，防市价污染。
     except Exception as e:
         logger.debug(f"_refresh_grid_display: {e}")
 
