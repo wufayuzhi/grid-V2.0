@@ -1482,13 +1482,30 @@ function resizeChart(el) {
   if (!chart) return;
   if (_chartFullMode) {
     const host = document.getElementById('chart-full-host');
-    chart.resize(host ? host.clientWidth : (el ? el.clientWidth : 0) || window.innerWidth,
-                 host ? host.clientHeight : (window.innerHeight - 90));
+    // 用 getBoundingClientRect 取真实渲染尺寸（fixed 容器 clientHeight 在横屏切换时可能滞后/不准）
+    let w = window.innerWidth, h = window.innerHeight;
+    if (host) {
+      const r = host.getBoundingClientRect();
+      if (r.width > 0) w = r.width;
+      if (r.height > 0) h = r.height;
+    }
+    chart.resize(w, h);
   } else if (isMobile()) {
     chart.resize(el ? el.clientWidth : window.innerWidth, 150);
   } else {
     chart.resize(el ? el.clientWidth : 800, 420);
   }
+}
+// 全屏模式下延迟重试 resize（等锁横屏/真全屏动画完成后，多次重试取到真实横屏尺寸）
+function resizeChartFullRetry(times) {
+  if (!chart || !_chartFullMode) return;
+  var n = times || 0;
+  if (n > 5) { resizeChart(); chart.timeScale().fitContent(); return; }
+  setTimeout(function () {
+    resizeChart();
+    chart.timeScale().fitContent();
+    resizeChartFullRetry(n + 1);
+  }, 150);
 }
 function initChart() {  const el = document.getElementById('chart-container');  chart = LightweightCharts.createChart(el, {
     width: el.clientWidth || 800, height: 420,
@@ -1560,10 +1577,8 @@ function openChartFull() {
   // ③ 全屏显示 EMA + 超级趋势 + 限价线
   redrawLines();
   drawLimitLines(window._lastOrders);
-  requestAnimationFrame(function() {
-    chart.resize(host.clientWidth || window.innerWidth, host.clientHeight || window.innerHeight - 90);
-    chart.timeScale().fitContent();
-  });
+  // 延迟重试 resize：等锁横屏/真全屏完成后取真实横屏尺寸
+  resizeChartFullRetry(0);
   window.scrollTo(0, 0);
 }
 // iOS 无法锁横屏时显示"旋转手机"引导
@@ -1577,7 +1592,7 @@ window.addEventListener('orientationchange', function () {
   var host = document.getElementById('chart-full-host');
   if (host && chart) {
     setTimeout(function () {
-      chart.resize(host.clientWidth || window.innerWidth, host.clientHeight || window.innerHeight - 90);
+      resizeChart();
       chart.timeScale().fitContent();
       _showFsRotateHint(false);
     }, 300);
