@@ -397,8 +397,12 @@ tr.adj-mixed-cancel td{color:#6566D8}
   .topbar .status { font-size: 11px; }
   #api-latency { color: var(--purple); font-weight: 800; }
 
-  /* ── 移动端行情栏 2 整行：8格每行4个 ── */
-  .mkt-strip { grid-template-columns: repeat(4,1fr); }
+  /* ── 移动端行情栏 2 整行：8格每行4个。minmax(0,1fr) 强制均分屏宽，防交易对/长数值卡片撑破溢出 ── */
+  .mkt-strip { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 4px; }
+  .mkt-cell { min-width: 0; overflow: hidden; }
+  .mkt-cell .ml { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mkt-cell .mv { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+  #mkt-inst-sel { max-width: 100% !important; font-size: 12px !important; }
 
   /* ── 移动端设置页工具卡片（原顶栏按钮收纳；仅 risk=设置 tab 显示） ── */
   body[data-tab="risk"] .mob-tools-card { display: block !important; }
