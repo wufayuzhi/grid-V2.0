@@ -3274,13 +3274,23 @@ async function saveAllParams() {
   document.querySelectorAll('.mod-slider').forEach(s => {
     params[s.id.replace('mod-', '')] = parseFloat(s.value);
   });
-  // 人工撤单二次确认（改动6）：保存网格间距相关参数会触发撤单重挂，
-  // 属人工操作 → 弹确认框，确认后才发给后端执行撤旧单重挂
+  // 人工撤单二次确认（改动6+2026-08-13重构）：保存哪些参数会触发撤单重挂 → 弹确认框
+  // ① 直接类（密度/ATR/调仓比例，改了挂单价就变）→ 保存即需确认
+  // ② 档位类（one_way_threshold/ladder_rates/ladder_densities）→ 只有当前失衡率 ≥ 档位才需确认
+  // ③ 风控/冰山/失血/其它 → 不触发重挂，不需确认
   const gridKeys = ['adj_ratio','base_density','defense_density','density_min',
-                    'atr_timeframe','atr_period','one_way_threshold',
-                    'ladder_rates','ladder_densities'];
+                    'atr_timeframe','atr_period'];
+  const ladderKeys = ['one_way_threshold','ladder_rates','ladder_densities'];
   const touchedGrid = gridKeys.some(k => params[k] !== undefined && (k in _pendingChanges));
-  if (touchedGrid && S.running && !S.paused) {
+  const curImb = (S && S.imbalance_rate !== undefined ? S.imbalance_rate : 0);
+  // 档位类：只要当前失衡率达到任一档（或达到单向阈值）才算会触发重挂
+  let touchedLadder = false;
+  if (ladderKeys.some(k => params[k] !== undefined && (k in _pendingChanges))) {
+    const rates = (S.params && S.params.ladder_rates) || [40,50,60,70,80];
+    if (curImb >= (S.params && S.params.one_way_threshold || 60)) touchedLadder = true;
+    else if (rates.some(r => curImb >= r)) touchedLadder = true;
+  }
+  if ((touchedGrid || touchedLadder) && S.running && !S.paused) {
     const ok = confirm('网格参数变更：将撤掉当前未成交挂单，并按新参数重新挂单。\n已成交仓位不受影响。确认执行吗？');
     if (!ok) return;  // 用户取消 → 不保存不重挂
   }

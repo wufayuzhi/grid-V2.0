@@ -1630,6 +1630,7 @@ def register_routes(app: FastAPI):
     async def set_params(req: dict):
         st = get_state()
         calc_recalc = False
+        changed = {}   # 记录值真正变化的键 → 旧值（2026-08-13 修复：原用 k in req 恒真）
         for k in ["capital", "reserved_capital", "leverage", "imbalance_threshold",
                   "iceberg_sz", "pxVar", "auto_adjust", "use_iceberg",
                   "use_risk_control", "use_bleed_melt", "use_rebalance",
@@ -1657,6 +1658,7 @@ def register_routes(app: FastAPI):
                         new_val = 0.0
                 setattr(st, k, new_val)
                 if old_val != new_val:
+                    changed[k] = old_val
                     d = _diag()
                     if d is not None:
                         try:
@@ -1669,18 +1671,47 @@ def register_routes(app: FastAPI):
                         calc_recalc = True
         if calc_recalc:
             _recalc_formula_details(st)
-        # 改动6：网格间距相关参数变化 → 保存后立即撤单重挂（撤单已带安全保险）
-        # 触发条件：网格密度/调仓比例/ATR/单向阈值等影响挂单价的参数变了，且引擎运行中
-        grid_params = {"adj_ratio", "base_density", "defense_density", "density_min",
-                       "atr_timeframe", "atr_period", "one_way_threshold",
-                       "ladder_rates", "ladder_densities"}
-        grid_changed = any(k in req for k in grid_params)
-        if grid_changed:
+        # 改动6：参数变更 → 是否撤单重挂（2026-08-13 按用户规则重构）
+        # 判定依据 = 值真正变化的键（changed），不再用"请求里带没带"（前端全量提交恒真=误伤）
+        # 三类：
+        #   ① 直接影响挂单价的参数（密度/ATR/调仓比例）→ 值变了就重挂
+        #   ② 失衡率档位参数（ladder_rates/ladder_densities/one_way_threshold）
+        #      → 只有"当前失衡率 ≥ 达到该档阈值"才重挂（没达到档位不重挂）
+        #   ③ 风控/冰山/失血/其它 → 永不重挂（不影响挂单价）
+        grid_direct = {"adj_ratio", "base_density", "defense_density", "density_min",
+                       "atr_timeframe", "atr_period"}
+        ladder_keys = {"ladder_rates", "ladder_densities", "one_way_threshold"}
+
+        rehang = False
+        if changed.keys() & grid_direct:
+            # ① 直接类：改了影响挂单价 → 重挂
+            rehang = True
+        elif changed.keys() & ladder_keys:
+            # ② 档位类：只有当前失衡率达到该档才重挂
+            try:
+                from formulas.safety import calc_imbalance_rate
+                pos = st.position
+                cur_imb = calc_imbalance_rate(pos.long_contracts, pos.short_contracts)
+                rates = list(getattr(st, "ladder_rates", [40, 50, 60, 70, 80]) or [])
+                # 单向阈值：失衡率 ≥ one_way_threshold 才切单向，达到才重挂
+                if "one_way_threshold" in changed:
+                    ow = float(getattr(st, "one_way_threshold", 60.0) or 60.0)
+                    if cur_imb >= ow:
+                        rehang = True
+                # 档位表：失衡率 ≥ 该档阈值才重挂（达到档位才生效）
+                if not rehang:
+                    for r in rates:
+                        if cur_imb >= r:
+                            rehang = True
+                            break
+            except Exception:
+                rehang = False
+
+        if rehang and getattr(st, "running", False) and not getattr(st, "paused", False):
             try:
                 from engine.grid import place_grid_orders
-                if getattr(st, "running", False) and not getattr(st, "paused", False):
-                    place_grid_orders(st)
-                    _add_log(st, "⚙ 网格参数已更新 → 已撤旧单并按新参数重挂", cat="PARAM")
+                place_grid_orders(st)
+                _add_log(st, "⚙ 网格参数已更新 → 已撤旧单并按新参数重挂", cat="PARAM")
             except Exception as e:
                 _add_log(st, f"⚠ 参数更新后重挂失败: {e}", level="ERROR", cat="PARAM")
         _add_log(st, "⚙ 参数已更新", cat="PARAM")
