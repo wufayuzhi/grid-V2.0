@@ -3556,6 +3556,9 @@ setInterval(() => { if (S.inst_id) loadChartData(S.cur_tf || '15m', false); }, 5
   // 导出到全局，让 HTML onclick/onchange 能调用
   window.setTf = setTf;
   window.redrawLines = redrawLines;
+  window.openChartFull = openChartFull;
+  window.closeChartFull = closeChartFull;
+  window.fsSetTf = fsSetTf;
   window.onSTChange = onSTChange;
   window.showLog = showLog;
   window.hideLog = hideLog;
