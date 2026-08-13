@@ -391,6 +391,33 @@ tr.adj-mixed-cancel td{color:#6566D8}
   table th, table td { padding: 5px 8px; }
   button { font-size: 12px !important; padding: 5px 12px !important; }
 
+  /* ── 移动端顶栏精简：隐藏工具按钮/标记价/24h量/时间模式，只留 logo+状态灯+API速率+运行 ── */
+  .tb-hide-mob { display: none !important; }
+  .topbar { flex-wrap: nowrap; white-space: nowrap; }
+  .topbar .status { font-size: 11px; }
+  #api-latency { color: var(--purple); font-weight: 800; }
+
+  /* ── 移动端行情栏 2 整行：8格每行4个 ── */
+  .mkt-strip { grid-template-columns: repeat(4,1fr); }
+
+  /* ── 移动端设置页工具卡片（原顶栏按钮收纳；仅 risk=设置 tab 显示） ── */
+  body[data-tab="risk"] .mob-tools-card { display: block !important; }
+  .mob-tools-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 8px; }
+  .mob-tool-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 6px; border-radius: 10px; border: 1px solid var(--bd); background: var(--card); cursor: pointer; font-size: 11px; font-weight: 600; color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.04); }
+  .mob-tool-btn .t-ic { font-size: 20px; }
+  .mob-tool-btn.api { background: linear-gradient(135deg,var(--purple),#7C3AED); color: #fff; border: none; }
+  .mob-tool-btn.notify { background: linear-gradient(135deg,#3B82F6,#2563EB); color: #fff; border: none; }
+  .mob-tool-btn.screener { background: linear-gradient(135deg,var(--purple),var(--blue)); color: #fff; border: none; }
+  .mob-tool-btn.log { background: #F8FAFC; color: var(--t2); border: 1px solid var(--bd); }
+  .mob-mode-toggle { display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 10px; border: 1px solid var(--bd); background: #F8FAFC; margin-top: 8px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text); }
+  .mob-mode-toggle .mt-state { margin-left: auto; font-size: 11px; font-weight: 700; }
+  .mob-mode-toggle .mt-state.live { color: var(--green); }
+  .mob-mode-toggle .mt-state.demo { color: var(--orange); }
+  .mob-mode-toggle .sw { width: 38px; height: 20px; background: var(--t3); border-radius: 10px; position: relative; transition: all .3s; flex-shrink: 0; }
+  .mob-mode-toggle .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: all .3s; }
+  .mob-mode-toggle .sw.on { background: var(--green); }
+  .mob-mode-toggle .sw.on::after { left: 20px; }
+
   /* ══ 手机端改造（仅≤768px）：缩略K线 + 滑块收弹窗 + 防误触 ══ */
 
   /* 手机端竖屏：显示缩略K线（纯K线+限价线，~150px），隐藏标题/指标控制/时间框（全屏时提供） */
@@ -659,16 +686,16 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
   <span id="demo-badge" class="badge demo">模拟盘</span>
   <span class="api-status"><span class="dot g" id="okx-dot"></span><span id="okx-status">行情正常</span></span>
   <span class="api-status" style="margin-left:4px"><span id="api-latency">API —ms</span></span>
-  <span class="top-val">标记价 <b id="top-px">—</b></span>
-  <span class="top-val">24h量 <b id="top-vol">—</b></span>
-  <button onclick="toggleTimeMode(this)" style="margin-left:8px;background:#3B82F6;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:600;padding:3px 10px;cursor:pointer">本地</button>
-  <div class="toggle-wrap" onclick="toggleSim()" style="cursor:pointer">
+  <span class="top-val tb-hide-mob">标记价 <b id="top-px">—</b></span>
+  <span class="top-val tb-hide-mob">24h量 <b id="top-vol">—</b></span>
+  <button onclick="toggleTimeMode(this)" class="tb-hide-mob" style="margin-left:8px;background:#3B82F6;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:600;padding:3px 10px;cursor:pointer">本地</button>
+  <div class="toggle-wrap tb-hide-mob" onclick="toggleSim()" style="cursor:pointer">
     <span>实盘</span><span id="sim-sw" class="sw"></span><span>模拟</span>
   </div>
-  <button class="btn api" onclick="openApiModal()" title="API密钥设置" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,var(--purple),#7C3AED);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(124,58,237,.3);transition:all .2s"><span style="font-size:14px">🔑</span> API <span id="api-masked-tag" style="font-size:11px;font-weight:400;opacity:.9"></span></button>
-  <button class="btn api" onclick="openWecomConfigModal()" title="企微通知配置" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(59,130,246,.3);transition:all .2s"><span style="font-size:14px">💬</span> 通知 <span id="wc-masked-tag" style="font-size:11px;font-weight:400;opacity:.9"></span></button>
-  <button class="btn log" onclick="window.open('/screener/','_blank')" title="网格交易对筛选" style="background:linear-gradient(135deg,var(--purple),var(--blue));color:#fff;border:none">🔍 选币</button>
-  <button class="btn log" onclick="showLog()">📋 日志</button>
+  <button class="btn api tb-hide-mob" onclick="openApiModal()" title="API密钥设置" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,var(--purple),#7C3AED);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(124,58,237,.3);transition:all .2s"><span style="font-size:14px">🔑</span> API <span id="api-masked-tag" style="font-size:11px;font-weight:400;opacity:.9"></span></button>
+  <button class="btn api tb-hide-mob" onclick="openWecomConfigModal()" title="企微通知配置" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(59,130,246,.3);transition:all .2s"><span style="font-size:14px">💬</span> 通知 <span id="wc-masked-tag" style="font-size:11px;font-weight:400;opacity:.9"></span></button>
+  <button class="btn log tb-hide-mob" onclick="window.open('/screener/','_blank')" title="网格交易对筛选" style="background:linear-gradient(135deg,var(--purple),var(--blue));color:#fff;border:none">🔍 选币</button>
+  <button class="btn log tb-hide-mob" onclick="showLog()">📋 日志</button>
   <span id="badge-run" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--t2);font-weight:600"><span id="badge-run-dot" style="width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--red);box-shadow:0 0 6px var(--red)"></span><span id="badge-run-txt">停止</span></span>
 </div>
 
@@ -849,6 +876,22 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
       <button class="preset-btn" onclick="applyPreset('aggressive',this)" style="padding:4px 10px;border-radius:4px;border:1px solid var(--bd);background:var(--card2);cursor:pointer;font-size:11px">🚀 激进</button>
     </div>
   </div>
+  <!-- 移动端设置页工具卡片（PC 隐藏；收纳顶栏的 API/通知/选币/日志 + 实盘/模拟切换） -->
+  <div class="ctrl-card mob-tools-card" data-mob="risk" style="display:none">
+    <div class="cc-title">🛠️ 工具</div>
+    <div class="mob-tools-grid">
+      <button class="mob-tool-btn api" onclick="openApiModal()"><span class="t-ic">🔑</span>API密钥</button>
+      <button class="mob-tool-btn notify" onclick="openWecomConfigModal()"><span class="t-ic">💬</span>通知</button>
+      <button class="mob-tool-btn screener" onclick="window.open('/screener/','_blank')"><span class="t-ic">🔍</span>选币</button>
+      <button class="mob-tool-btn log" onclick="showLog()"><span class="t-ic">📋</span>日志</button>
+    </div>
+    <div class="mob-mode-toggle" onclick="toggleSim()">
+      <span>🔄</span>
+      <span>实盘 / 模拟盘</span>
+      <span class="mt-state live" id="mob-mode-state">实盘</span>
+      <span id="mob-sim-sw" class="sw"></span>
+    </div>
+  </div>
   <!-- Equity -->
   <div class="ctrl-card" data-mob="trade">
     <div class="cc-title">💰 权益</div>
@@ -925,7 +968,7 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
   <button class="act" data-tab="mkt" onclick="mobTab('mkt',this)"><span class="tb-ic">📈</span><span class="tb-lb">行情</span></button>
   <button data-tab="pos" onclick="mobTab('pos',this)"><span class="tb-ic">💼</span><span class="tb-lb">持仓</span></button>
   <button data-tab="trade" onclick="mobTab('trade',this)"><span class="tb-ic">🎯</span><span class="tb-lb">交易</span></button>
-  <button data-tab="risk" onclick="mobTab('risk',this)"><span class="tb-ic">🛡️</span><span class="tb-lb">风控</span></button>
+  <button data-tab="risk" onclick="mobTab('risk',this)"><span class="tb-ic">⚙️</span><span class="tb-lb">设置</span></button>
 </nav>
 
 <!-- ═══════ 手机端防误触二次确认框（通用，仅手机触发）═══════ -->
@@ -1889,6 +1932,11 @@ async function refresh() {
     document.getElementById('demo-badge').textContent = S.simulated ? '模拟盘' : '实盘';
     document.getElementById('demo-badge').className = 'badge ' + (S.simulated ? 'demo' : 'live');
     document.getElementById('sim-sw').className = 'sw' + (S.simulated ? ' on' : '');
+    // 移动端设置页 实盘/模拟 切换开关同步
+    const _msw = document.getElementById('mob-sim-sw');
+    if (_msw) _msw.className = 'sw' + (S.simulated ? ' on' : '');
+    const _mst = document.getElementById('mob-mode-state');
+    if (_mst) { _mst.textContent = S.simulated ? '模拟盘' : '实盘'; _mst.className = 'mt-state ' + (S.simulated ? 'demo' : 'live'); }
     const _runDot = document.getElementById('badge-run-dot');
     const _runTxt = document.getElementById('badge-run-txt');
     if (S.running && !p.paused) {
