@@ -66,6 +66,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto Sans
 /* 🔹 LAYER 3: CHART */
 .chart-layer{background:var(--card);border-radius:var(--radius);padding:10px;margin-bottom:8px;border:1px solid var(--bd);box-shadow:var(--shadow)}
 .chart-layer .ch-title{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-weight:600;font-size:13px}
+.mob-ch-fullbar{display:none}
 .chart-layer .ch-title .legend{display:flex;gap:10px;margin-left:auto;font-size:10px;font-weight:400}
 .chart-layer .ch-title .legend span{padding:2px 8px;border-radius:4px}
 .chart-layer .ch-title .legend .sweet{background:#DCFCE7;color:var(--green)}
@@ -390,13 +391,43 @@ tr.adj-mixed-cancel td{color:#6566D8}
   table th, table td { padding: 5px 8px; }
   button { font-size: 12px !important; padding: 5px 12px !important; }
 
-  /* ══ 手机端改造（仅≤768px）：K线隐藏 + 滑块收弹窗 + 防误触 ══ */
+  /* ══ 手机端改造（仅≤768px）：缩略K线 + 滑块收弹窗 + 防误触 ══ */
 
-  /* 手机端去掉K线，仅保留副行情条 */
+  /* 手机端竖屏：显示缩略K线（纯K线+限价线，~150px），隐藏标题/指标控制/时间框（全屏时提供） */
   #tab-chart .ch-title,
-  #tab-chart #chart-container,
   #tab-chart .ch-controls,
   #tab-chart .frame-row { display: none !important; }
+  #chart-container { height: 150px !important; }
+  /* 缩略K线 全屏按钮行（PC 隐藏，移动端显示） */
+  .mob-ch-fullbar { display: none; }
+  #tab-chart .mob-ch-fullbar { display: flex; justify-content: flex-end; padding: 4px 2px 6px; }
+  /* 全屏K线 overlay（fixed 占满视口，横屏友好；z-index 高于表格/tabbar，低于参数弹窗） */
+  #mob-ch-fullscreen {
+    position: fixed; inset: 0; z-index: 900; background: #fff;
+    display: none; flex-direction: column;
+  }
+  #mob-ch-fullscreen.open { display: flex; }
+  #mob-ch-fullscreen .fs-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 12px; border-bottom: 1px solid var(--bd); background: var(--card);
+  }
+  #mob-ch-fullscreen .fs-bar .fs-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  #mob-ch-fullscreen .fs-close {
+    background: linear-gradient(135deg,#DC2626,#EF4444); color: #fff; border: none;
+    border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  #mob-ch-fullscreen .fs-tf { display: flex; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--bd); flex-wrap: wrap; }
+  #mob-ch-fullscreen .fs-tf button {
+    border: 1px solid var(--bd); background: var(--card2); color: var(--text);
+    border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+  }
+  #mob-ch-fullscreen .fs-tf button.active {
+    background: linear-gradient(135deg,var(--purple),var(--blue)); color: #fff; border-color: transparent;
+  }
+  #mob-ch-fullscreen .fs-host { flex: 1; min-height: 0; }
+  /* 全屏时锁定页面滚动 + 隐藏底部 tabbar（真全屏） */
+  body.mob-fs-open { overflow: hidden; }
+  body.mob-fs-open #mob-tabbar { display: none !important; }
 
   /* 杠杆/安全系数/初始建仓：收进⚙弹窗；在卡片里默认隐藏（JS relocate 进弹窗后由弹窗样式显示） */
   #lev-slider, #sf-slider, #ctrl-init { display: none !important; }
@@ -659,6 +690,9 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
     <div class="legend">
       <span class="sweet">止盈</span><span class="warn">熔断</span><span class="risk">爆表</span>
     </div>
+  </div>
+  <div class="mob-ch-fullbar">
+    <button class="btn pri" style="font-size:12px;padding:5px 14px;border-radius:8px;border:none;color:#fff;font-weight:600;cursor:pointer" onclick="openChartFull()">⛶ 全屏K线</button>
   </div>
   <div id="chart-container"></div>
   <div class="ch-controls">
@@ -1406,6 +1440,7 @@ let S = {
   params: {}, adjust_history: [], order_history: []
 };
 let chart = null, series = null, lineSeries = {};
+let _chartFullMode = false;   // 手机端是否处于横屏全屏K线模式（true=全屏显示EMA/超级趋势；false=缩略只显示K线+限价线）
 let _adapterTick = 0,   // 最后一次适配器拉取时间戳
     _marketTickers = [], // 从 /api/v1/adapter 缓存的最新 tickers
     _slidersSynced = false,
@@ -1442,6 +1477,19 @@ function fmtPx(v, ts) {
 }
 
 // ═══════════════════ CHART ═══════════════════
+// 统一的 chart resize（按当前模式：全屏=跟随 host、移动端缩略=150px、PC=420）
+function resizeChart(el) {
+  if (!chart) return;
+  if (_chartFullMode) {
+    const host = document.getElementById('chart-full-host');
+    chart.resize(host ? host.clientWidth : (el ? el.clientWidth : 0) || window.innerWidth,
+                 host ? host.clientHeight : (window.innerHeight - 90));
+  } else if (isMobile()) {
+    chart.resize(el ? el.clientWidth : window.innerWidth, 150);
+  } else {
+    chart.resize(el ? el.clientWidth : 800, 420);
+  }
+}
 function initChart() {  const el = document.getElementById('chart-container');  chart = LightweightCharts.createChart(el, {
     width: el.clientWidth || 800, height: 420,
     layout: { background: { color: '#ffffff' }, textColor: '#64748B' },
@@ -1475,7 +1523,62 @@ function initChart() {  const el = document.getElementById('chart-container');  
   lineSeries.st = chart.addLineSeries({ color: '#10B981', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, visible: true, priceScaleId: 'right' });
   lineSeries.ema1 = chart.addLineSeries({ color: '#7C3AED', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, visible: true, priceScaleId: 'right' });
   lineSeries.ema2 = chart.addLineSeries({ color: '#3B82F6', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, visible: true, priceScaleId: 'right' });
-  window.addEventListener('resize', () => chart.resize(el.clientWidth || 800, 420));
+  window.addEventListener('resize', () => resizeChart(el));
+}
+
+// ═══ 手机端 横屏全屏K线（复用同一个 chart 实例，容器搬移到 #chart-full-host 并 resize）═══
+let _chartFullHost = null; // 全屏容器缓存
+function openChartFull() {
+  if (!isMobile()) return;
+  const el = document.getElementById('chart-container');
+  const host = document.getElementById('chart-full-host');
+  if (!el || !host || !chart) return;
+  _chartFullMode = true;
+  // 记录原位（PC/缩略容器 #tab-chart 内），关闭时搬回
+  _chartFullHost = el.parentNode;
+  el.dataset.origIdx = Array.prototype.indexOf.call(_chartFullHost.children, el);
+  host.appendChild(el);                 // 搬进全屏容器
+  document.getElementById('mob-ch-fullscreen').classList.add('open');
+  document.body.classList.add('mob-fs-open');
+  // 全屏显示 EMA + 超级趋势 + 限价线
+  redrawLines();
+  drawLimitLines(window._lastOrders);
+  requestAnimationFrame(function() {
+    chart.resize(host.clientWidth || window.innerWidth, host.clientHeight || window.innerHeight - 90);
+    chart.timeScale().fitContent();
+  });
+  window.scrollTo(0, 0);
+}
+function closeChartFull() {
+  const ov = document.getElementById('mob-ch-fullscreen');
+  const el = document.getElementById('chart-container');
+  if (!ov || !el || !chart) return;
+  ov.classList.remove('open');
+  document.body.classList.remove('mob-fs-open');
+  _chartFullMode = false;
+  // 搬回缩略容器原位
+  if (_chartFullHost) {
+    const idx = parseInt(el.dataset.origIdx || '0', 10);
+    _chartFullHost.insertBefore(el, _chartFullHost.children[idx] || null);
+    delete el.dataset.origIdx;
+  }
+  _chartFullHost = null;
+  // 缩略模式：隐藏 EMA/超级趋势，只留 K线+限价线
+  redrawLines();
+  drawLimitLines(window._lastOrders);
+  requestAnimationFrame(function() {
+    const parent = el.parentNode;
+    chart.resize(parent ? parent.clientWidth : window.innerWidth, 150);
+    chart.timeScale().fitContent();
+  });
+}
+// 全屏时间框切换（与 PC setTf 走同一套 S.cur_tf + loadChartData，仅切换 active 高亮）
+function fsSetTf(tf, btn) {
+  document.querySelectorAll('#mob-ch-fullscreen .fs-tf button').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const barMap = { '1m': '1m', '5m': '5m', '15m': '15m', '1h': '1H', '4h': '4H', '6h': '6H', '1D': '1D' };
+  S.cur_tf = barMap[tf] || '15m';
+  loadChartData(S.cur_tf, true);
 }
 
 let lastChartKey = '';          // 上次K线的 币种:时段 标识
@@ -1587,10 +1690,12 @@ function redrawLines(doFit) {
   if (!data || !data.length) return;
 
   // ── SuperTrend：单条线，逐点染色（跟 TradingView 一样）──
-  const showST = document.getElementById('ch-supertrend-m')?.checked;
-  const showBG = document.getElementById('ch-st-bg-m')?.checked;
-  const showE1 = document.getElementById('ch-ema1-m')?.checked;
-  const showE2 = document.getElementById('ch-ema2-m')?.checked;
+  // 移动端缩略模式（未开全屏）：强制隐藏 EMA/超级趋势，只留 K线+限价线；全屏/PC 按开关
+  const thumbHide = isMobile() && !_chartFullMode;
+  const showST = thumbHide ? false : document.getElementById('ch-supertrend-m')?.checked;
+  const showBG = thumbHide ? false : document.getElementById('ch-st-bg-m')?.checked;
+  const showE1 = thumbHide ? false : document.getElementById('ch-ema1-m')?.checked;
+  const showE2 = thumbHide ? false : document.getElementById('ch-ema2-m')?.checked;
 
   if (showST) {
     const stPeriod = parseInt(document.getElementById('mod-st_period')?.value || 10);
@@ -2368,7 +2473,7 @@ function mobTab(tab, btn) {
     b.classList.toggle('act', b.getAttribute('data-tab') === tab);
   });
   // 切换到行情页时触发布局刷新
-  if (tab === 'mkt') setTimeout(function() { if (chart) { chart.resize(); chart.timeScale().fitContent(); } }, 100);
+  if (tab === 'mkt') setTimeout(function() { if (chart) { resizeChart(document.getElementById('chart-container')); chart.timeScale().fitContent(); } }, 100);
 }
 // ═══════ 委托记录 & 调平记录（拉交易所真实数据）═══════
 const GROUP_LABEL = { pingduo_kaikong: '开空平多', pingkong_kaiduo: '开多平空', shrink: '纯缩仓', canceled: '撤销单', other: '其他' };
@@ -3541,7 +3646,7 @@ setInterval(() => { if (S.inst_id) loadChartData(S.cur_tf || '15m', false); }, 5
       lineSeries.st = chart.addLineSeries({ color: '#10B981', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, visible: prevVisible.st, priceScaleId: 'right' });
       lineSeries.ema1 = chart.addLineSeries({ color: '#7C3AED', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, visible: prevVisible.ema1, priceScaleId: 'right' });
       lineSeries.ema2 = chart.addLineSeries({ color: '#3B82F6', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, visible: prevVisible.ema2, priceScaleId: 'right' });
-      window.addEventListener('resize', () => chart.resize(el.clientWidth || 800, 420));
+      window.addEventListener('resize', () => resizeChart(el));
       redrawLines();
       drawLimitLines(window._lastOrders);   // 重建后恢复限价委托线
       chart.timeScale().fitContent();
@@ -3561,5 +3666,24 @@ setInterval(() => { if (S.inst_id) loadChartData(S.cur_tf || '15m', false); }, 5
 </script>
 </div><!-- close tab-params -->
 <div id="formula-tooltip" class="formula-tooltip"></div>
+
+<!-- ═══════ 手机端 横屏全屏K线 overlay（仅≤768px 由 openChartFull 打开）═══════ -->
+<div id="mob-ch-fullscreen">
+  <div class="fs-bar">
+    <span class="fs-title">📈 K线图</span>
+    <button class="fs-close" onclick="closeChartFull()">✕ 关闭</button>
+  </div>
+  <div class="fs-tf">
+    <button onclick="fsSetTf('1m',this)">1m</button>
+    <button onclick="fsSetTf('5m',this)">5m</button>
+    <button class="active" onclick="fsSetTf('15m',this)">15m</button>
+    <button onclick="fsSetTf('1h',this)">1h</button>
+    <button onclick="fsSetTf('4h',this)">4h</button>
+    <button onclick="fsSetTf('6h',this)">6h</button>
+    <button onclick="fsSetTf('1D',this)">1D</button>
+    <button onclick="openParamModal('ind')" style="margin-left:auto;border:1px solid var(--bd);background:var(--card2);color:var(--purple);font-weight:600">⚙ 指标</button>
+  </div>
+  <div class="fs-host" id="chart-full-host"></div>
+</div>
 </body>
 </html>
