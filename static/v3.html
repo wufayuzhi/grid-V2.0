@@ -1540,7 +1540,24 @@ function openChartFull() {
   host.appendChild(el);                 // 搬进全屏容器
   document.getElementById('mob-ch-fullscreen').classList.add('open');
   document.body.classList.add('mob-fs-open');
-  // 全屏显示 EMA + 超级趋势 + 限价线
+  // ① 进入浏览器真全屏（隐藏地址栏/状态栏，更接近横屏观感）
+  try {
+    const docEl = document.documentElement;
+    if (docEl.requestFullscreen) {
+      docEl.requestFullscreen().catch(function(){});
+    } else if (docEl.webkitRequestFullscreen) {
+      docEl.webkitRequestFullscreen();
+    }
+  } catch (e) {}
+  // ② 尝试锁横屏（Android 直接强制横屏；iOS Safari 不支持会静默失败）
+  try {
+    if (window.screen && screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(function(){ _showFsRotateHint(true); });
+    } else {
+      _showFsRotateHint(true);
+    }
+  } catch (e) { _showFsRotateHint(true); }
+  // ③ 全屏显示 EMA + 超级趋势 + 限价线
   redrawLines();
   drawLimitLines(window._lastOrders);
   requestAnimationFrame(function() {
@@ -1549,12 +1566,40 @@ function openChartFull() {
   });
   window.scrollTo(0, 0);
 }
+// iOS 无法锁横屏时显示"旋转手机"引导
+function _showFsRotateHint(show) {
+  var h = document.getElementById('fs-rotate-hint');
+  if (h) h.style.display = show ? 'flex' : 'none';
+}
+// 监听设备旋转：转横屏后重新适配图表尺寸
+window.addEventListener('orientationchange', function () {
+  if (!_chartFullMode) return;
+  var host = document.getElementById('chart-full-host');
+  if (host && chart) {
+    setTimeout(function () {
+      chart.resize(host.clientWidth || window.innerWidth, host.clientHeight || window.innerHeight - 90);
+      chart.timeScale().fitContent();
+      _showFsRotateHint(false);
+    }, 300);
+  }
+});
 function closeChartFull() {
   const ov = document.getElementById('mob-ch-fullscreen');
   const el = document.getElementById('chart-container');
   if (!ov || !el || !chart) return;
   ov.classList.remove('open');
   document.body.classList.remove('mob-fs-open');
+  // ① 退出浏览器全屏
+  try {
+    if (document.exitFullscreen) document.exitFullscreen().catch(function(){});
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+  } catch (e) {}
+  // ② 解锁方向（Android）
+  try {
+    if (window.screen && screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+  } catch (e) {}
+  // ③ 隐藏旋转引导
+  _showFsRotateHint(false);
   _chartFullMode = false;
   // 搬回缩略容器原位
   if (_chartFullHost) {
@@ -3686,6 +3731,7 @@ setInterval(() => { if (S.inst_id) loadChartData(S.cur_tf || '15m', false); }, 5
     <button onclick="fsSetTf('1D',this)">1D</button>
     <button onclick="openParamModal('ind')" style="margin-left:auto;border:1px solid var(--bd);background:var(--card2);color:var(--purple);font-weight:600">⚙ 指标</button>
   </div>
+  <div id="fs-rotate-hint" style="display:none;align-items:center;justify-content:center;gap:8px;padding:10px;color:var(--purple);font-weight:600;font-size:13px;border-bottom:1px solid var(--bd)">↻ 请旋转手机查看横屏K线</div>
   <div class="fs-host" id="chart-full-host"></div>
 </div>
 </body>
