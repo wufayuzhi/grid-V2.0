@@ -2370,7 +2370,7 @@ function mobTab(tab, btn) {
   if (tab === 'mkt') setTimeout(function() { if (chart) { chart.resize(); chart.timeScale().fitContent(); } }, 100);
 }
 // ═══════ 委托记录 & 调平记录（拉交易所真实数据）═══════
-const GROUP_LABEL = { pingduo_kaikong: '平多开空', pingkong_kaiduo: '平空开多', shrink: '纯缩仓', canceled: '撤销单', other: '其他' };
+const GROUP_LABEL = { pingduo_kaikong: '开空平多', pingkong_kaiduo: '开多平空', shrink: '纯缩仓', canceled: '撤销单', other: '其他' };
 const GROUP_CLS = { pingduo_kaikong: 'adj-pingduo', pingkong_kaiduo: 'adj-pingkong', shrink: 'adj-shrink', canceled: 'adj-canceled', other: 'adj-other' };
 
 function sideTxt(side) { return side === 'buy' ? '🟢买' : (side === 'sell' ? '🔴卖' : ''); }
@@ -2400,9 +2400,10 @@ function drawLimitLines(rows) {
   // 先移除旧线
   if (series.limitLong) { try { series.removePriceLine(series.limitLong); } catch(_) {} series.limitLong = null; }
   if (series.limitShort) { try { series.removePriceLine(series.limitShort); } catch(_) {} series.limitShort = null; }
-  // 多单(买开多)委托线 → 红；空单(卖开空)委托线 → 绿
-  if (buyPx > 0)  series.limitLong  = series.createPriceLine({ price: buyPx,  color: '#EF4444', lineWidth: 1, lineStyle: window.LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: '限价 ' + buySz });
-  if (sellPx > 0) series.limitShort = series.createPriceLine({ price: sellPx, color: '#10B981', lineWidth: 1, lineStyle: window.LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: '限价 ' + sellSz });
+  // K线限价委托线颜色（与调平记录语义对齐）：
+  // 卖开空(上端·平多开空方向)→红；买开多(下端·平空开多方向)→绿
+  if (buyPx > 0)  series.limitLong  = series.createPriceLine({ price: buyPx,  color: '#10B981', lineWidth: 1, lineStyle: window.LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: '限价 ' + buySz });
+  if (sellPx > 0) series.limitShort = series.createPriceLine({ price: sellPx, color: '#EF4444', lineWidth: 1, lineStyle: window.LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: '限价 ' + sellSz });
 }
 
 function renderOrders(rows) {
@@ -2501,8 +2502,8 @@ function adjRow(r, showInst) {
 }
 function adjStatsHtml(stats) {
   stats = stats || {};
-  return `<b class="adj-pingduo">🔴平多开空 ${stats.pingduo_kaikong || 0}次</b>` +
-         `<b class="adj-pingkong">🟢平空开多 ${stats.pingkong_kaiduo || 0}次</b>` +
+  return `<b class="adj-pingduo">🔴开空平多 ${stats.pingduo_kaikong || 0}次</b>` +
+         `<b class="adj-pingkong">🟢开多平空 ${stats.pingkong_kaiduo || 0}次</b>` +
          `<span class="adj-shrink">🟡纯缩仓 ${stats.shrink || 0}次</span>` +
          `<span class="adj-canceled">🔵撤销单 ${stats.canceled || 0}次</span>`;
 }
