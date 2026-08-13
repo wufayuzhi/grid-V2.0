@@ -92,6 +92,7 @@ def save_state():
         "one_way_threshold": st.one_way_threshold,
         "ladder_rates": st.ladder_rates,
         "ladder_densities": st.ladder_densities,
+        "ladder_enabled": st.ladder_enabled,
         "confirm_time": st.confirm_time,
         "exit_buffer": st.exit_buffer,
         "debounce_loss_line": st.debounce_loss_line,
@@ -227,6 +228,8 @@ def load_state() -> GridState:
         st.one_way_threshold = data.get("one_way_threshold", 60.0)
         st.ladder_rates = data.get("ladder_rates", [40, 50, 60, 70, 80])
         st.ladder_densities = data.get("ladder_densities", [1.4, 1.0, 0.75, 0.5, 0.3])
+        # 兼容旧仓(无 ladder_enabled)：默认全启用
+        st.ladder_enabled = data.get("ladder_enabled", [True, True, True, True, True])
         st.confirm_time = data.get("confirm_time", 30.0)
         st.exit_buffer = data.get("exit_buffer", 5.0)
         st.debounce_loss_line = data.get("debounce_loss_line", -0.5)

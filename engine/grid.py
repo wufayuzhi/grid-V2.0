@@ -245,12 +245,20 @@ def _mode_base_density(st) -> float:
 
 
 def _ladder_density(st, imbalance) -> float:
-    """档位表密度：取失衡率对应档（≥该档取该档密度），未达档位取 base。文档§2.3。"""
+    """档位表密度：取失衡率对应档（≥该档取该档密度），未达档位取 base。文档§2.3。
+
+    2026-08-13：新增档位勾选（ladder_enabled）——未勾选的档跳过不参与判定。
+    遍历时只考虑"启用且失衡率达到"的档，取最高的那一档密度。
+    """
     rates = list(getattr(st, "ladder_rates", [40, 50, 60, 70, 80]) or [40, 50, 60, 70, 80])
     dens = list(getattr(st, "ladder_densities", [1.4, 1.0, 0.75, 0.5, 0.3]) or [1.4, 1.0, 0.75, 0.5, 0.3])
+    enabled = list(getattr(st, "ladder_enabled", [True, True, True, True, True]) or [True, True, True, True, True])
     d = float(getattr(st, "base_density", 2.0) or 2.0)
-    for r, dd in zip(rates, dens):
-        if imbalance >= r:
+    for i, r in enumerate(rates):
+        if i >= len(enabled) or not enabled[i]:
+            continue  # 未勾选档：跳过
+        dd = dens[i] if i < len(dens) else None
+        if imbalance >= r and dd is not None:
             d = float(dd)
     return d
 

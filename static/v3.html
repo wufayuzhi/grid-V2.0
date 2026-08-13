@@ -125,6 +125,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto Sans
 .sw-btn{border:1px solid var(--bd);border-radius:var(--radius2);padding:6px 8px;background:var(--card2);cursor:pointer;transition:all .15s}
 .sw-btn:hover{border-color:var(--purple)}
 .sw-top{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text)}
+.sw-opt{margin-left:auto;cursor:pointer;font-size:11px;opacity:.7;padding:0 2px}
+.sw-opt:hover{opacity:1}
 .sw-param{font-size:10px;color:var(--t3);margin-top:3px;padding-left:12px}
 .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;background:var(--t3)}
 .dot.blue{background:#2196F3}
@@ -784,22 +786,22 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
       <button id="btn-iso" onclick="dblTapConfirm('切换为 逐仓保证金模式？', __switchIso, this)">逐仓</button>
     </div>
     </div>
-    <!-- 状态灯开关 2×2 -->
+    <!-- 状态灯开关 2×2：点按钮=切开关(启/停)，点 ⚙️=弹参数窗 -->
     <div class="sw-grid">
-      <div class="sw-btn" onclick="dblTapOpen(function(){openParamModal('imb')},this)">
-        <div class="sw-top"><span class="dot" id="sw-adj-dot"></span><b>失衡监控</b></div>
+      <div class="sw-btn" onclick="dblTapOpen(function(){toggleParam('auto_adjust')},this)">
+        <div class="sw-top"><span class="dot" id="sw-adj-dot"></span><b>失衡监控</b><span class="sw-opt" onclick="event.stopPropagation();openParamModal('imb')" title="参数">⚙️</span></div>
         <div class="sw-param">失衡阈值 <b id="sw-adj-val">—</b>%</div>
       </div>
-      <div class="sw-btn" onclick="dblTapOpen(function(){openParamModal('ice')},this)">
-        <div class="sw-top"><span class="dot" id="sw-ice-dot"></span><b>冰山委托</b></div>
+      <div class="sw-btn" onclick="dblTapOpen(function(){toggleParam('use_iceberg')},this)">
+        <div class="sw-top"><span class="dot" id="sw-ice-dot"></span><b>冰山委托</b><span class="sw-opt" onclick="event.stopPropagation();openParamModal('ice')" title="参数">⚙️</span></div>
         <div class="sw-param">单笔 <b id="sw-ice-val">—</b> 张</div>
       </div>
-      <div class="sw-btn" onclick="dblTapOpen(function(){openParamModal('risk')},this)">
-        <div class="sw-top"><span class="dot" id="sw-risk-dot"></span><b>风控启用</b></div>
+      <div class="sw-btn" onclick="dblTapOpen(function(){toggleParam('use_risk_control')},this)">
+        <div class="sw-top"><span class="dot" id="sw-risk-dot"></span><b>风控启用</b><span class="sw-opt" onclick="event.stopPropagation();openParamModal('risk')" title="参数">⚙️</span></div>
         <div class="sw-param">安全系数 <b id="sw-risk-val">—</b></div>
       </div>
-      <div class="sw-btn" onclick="dblTapOpen(function(){openParamModal('bleed')},this)">
-        <div class="sw-top"><span class="dot" id="sw-bleed-dot"></span><b>失血熔断</b></div>
+      <div class="sw-btn" onclick="dblTapOpen(function(){toggleParam('use_bleed_melt')},this)">
+        <div class="sw-top"><span class="dot" id="sw-bleed-dot"></span><b>失血熔断</b><span class="sw-opt" onclick="event.stopPropagation();openParamModal('bleed')" title="参数">⚙️</span></div>
         <div class="sw-param">失血阈值 <b id="sw-bleed-val">—</b>%</div>
       </div>
     </div>
@@ -1037,16 +1039,21 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
           <input type="range" class="mod-slider" id="mod-one_way_threshold" min="30" max="90" step="1" value="60" oninput="onModChange('one_way_threshold',this)">
           <div class="pm-note">失衡 ≥ 此% 时只平重仓侧（单向成交+紧急拆墙唯一开关）</div>
           <div class="pm-div"></div>
-          <div class="pm-sub">档位表（紧急格专用缩窄密度，文档§2.3/2.5）</div>
-          <div class="sl-row"><span>档1失衡率%</span><span class="sl-val" id="sl-lr1">40</span><span style="margin-left:8px">密度</span><select id="mod-ld1" onchange="onLadderChange(0,this)" style="padding:3px;border:1px solid var(--bd);border-radius:4px"><option value="0.3">0.3</option><option value="0.5">0.5</option><option value="0.75">0.75</option><option value="1.0">1.0</option><option value="1.4" selected>1.4</option><option value="2.0">2.0</option><option value="2.5">2.5</option><option value="3.0">3.0</option></select></div>
+          <div class="pm-sub">档位表（紧急格专用缩窄密度，文档§2.3/2.5）<span style="font-weight:400;color:var(--t3)">☑勾选=启用该档，密度可下拉可选/可手输</span></div>
+          <datalist id="ladder-dens-list">
+            <option value="0.3"></option><option value="0.5"></option><option value="0.75"></option>
+            <option value="1.0"></option><option value="1.4"></option><option value="2.0"></option>
+            <option value="2.5"></option><option value="3.0"></option>
+          </datalist>
+          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en1" onchange="toggleLadderEnabled(0,this)" style="width:auto"><span>档1失衡率%</span><span class="sl-val" id="sl-lr1">40</span><span style="margin-left:8px">密度</span><input list="ladder-dens-list" id="mod-ld1" onchange="onLadderChange(0,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
           <input type="range" class="mod-slider" id="mod-lr1" min="30" max="90" step="1" value="40" oninput="onLadderRateChange(0,this)">
-          <div class="sl-row"><span>档2失衡率%</span><span class="sl-val" id="sl-lr2">50</span><span style="margin-left:8px">密度</span><select id="mod-ld2" onchange="onLadderChange(1,this)" style="padding:3px;border:1px solid var(--bd);border-radius:4px"><option value="0.3">0.3</option><option value="0.5">0.5</option><option value="0.75">0.75</option><option value="1.0" selected>1.0</option><option value="1.4">1.4</option><option value="2.0">2.0</option><option value="2.5">2.5</option><option value="3.0">3.0</option></select></div>
+          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en2" onchange="toggleLadderEnabled(1,this)" style="width:auto"><span>档2失衡率%</span><span class="sl-val" id="sl-lr2">50</span><span style="margin-left:8px">密度</span><input list="ladder-dens-list" id="mod-ld2" onchange="onLadderChange(1,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
           <input type="range" class="mod-slider" id="mod-lr2" min="30" max="90" step="1" value="50" oninput="onLadderRateChange(1,this)">
-          <div class="sl-row"><span>档3失衡率%</span><span class="sl-val" id="sl-lr3">60</span><span style="margin-left:8px">密度</span><select id="mod-ld3" onchange="onLadderChange(2,this)" style="padding:3px;border:1px solid var(--bd);border-radius:4px"><option value="0.3">0.3</option><option value="0.5">0.5</option><option value="0.75" selected>0.75</option><option value="1.0">1.0</option><option value="1.4">1.4</option><option value="2.0">2.0</option><option value="2.5">2.5</option><option value="3.0">3.0</option></select></div>
+          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en3" onchange="toggleLadderEnabled(2,this)" style="width:auto"><span>档3失衡率%</span><span class="sl-val" id="sl-lr3">60</span><span style="margin-left:8px">密度</span><input list="ladder-dens-list" id="mod-ld3" onchange="onLadderChange(2,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
           <input type="range" class="mod-slider" id="mod-lr3" min="30" max="90" step="1" value="60" oninput="onLadderRateChange(2,this)">
-          <div class="sl-row"><span>档4失衡率%</span><span class="sl-val" id="sl-lr4">70</span><span style="margin-left:8px">密度</span><select id="mod-ld4" onchange="onLadderChange(3,this)" style="padding:3px;border:1px solid var(--bd);border-radius:4px"><option value="0.3">0.3</option><option value="0.5" selected>0.5</option><option value="0.75">0.75</option><option value="1.0">1.0</option><option value="1.4">1.4</option><option value="2.0">2.0</option><option value="2.5">2.5</option><option value="3.0">3.0</option></select></div>
+          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en4" onchange="toggleLadderEnabled(3,this)" style="width:auto"><span>档4失衡率%</span><span class="sl-val" id="sl-lr4">70</span><span style="margin-left:8px">密度</span><input list="ladder-dens-list" id="mod-ld4" onchange="onLadderChange(3,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
           <input type="range" class="mod-slider" id="mod-lr4" min="30" max="90" step="1" value="70" oninput="onLadderRateChange(3,this)">
-          <div class="sl-row"><span>档5失衡率%</span><span class="sl-val" id="sl-lr5">80</span><span style="margin-left:8px">密度</span><select id="mod-ld5" onchange="onLadderChange(4,this)" style="padding:3px;border:1px solid var(--bd);border-radius:4px"><option value="0.3" selected>0.3</option><option value="0.5">0.5</option><option value="0.75">0.75</option><option value="1.0">1.0</option><option value="1.4">1.4</option><option value="2.0">2.0</option><option value="2.5">2.5</option><option value="3.0">3.0</option></select></div>
+          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en5" onchange="toggleLadderEnabled(4,this)" style="width:auto"><span>档5失衡率%</span><span class="sl-val" id="sl-lr5">80</span><span style="margin-left:8px">密度</span><input list="ladder-dens-list" id="mod-ld5" onchange="onLadderChange(4,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
           <input type="range" class="mod-slider" id="mod-lr5" min="30" max="90" step="1" value="80" oninput="onLadderRateChange(4,this)">
           <div class="sl-row"><span>确认时间T(s)</span><span class="sl-val" id="sl-confirm_time">30</span></div>
           <input type="range" class="mod-slider" id="mod-confirm_time" min="10" max="120" step="1" value="30" oninput="onModChange('confirm_time',this)">
@@ -2843,11 +2850,18 @@ function onLadderRateChange(idx, el) {
   if (lbl) lbl.textContent = el.value;
   _pendingChanges.ladder_rates = rates;
 }
-// 档位密度下拉 → 更新 ladder_densities 数组
+// 档位密度输入（下拉可选/可手输）→ 更新 ladder_densities 数组
 function onLadderChange(idx, el) {
   const dens = (S.params.ladder_densities || [1.4, 1.0, 0.75, 0.5, 0.3]).slice();
-  dens[idx] = parseFloat(el.value);
+  const v = parseFloat(el.value);
+  if (!isNaN(v) && v > 0) dens[idx] = v;
   _pendingChanges.ladder_densities = dens;
+}
+// 档位勾选启用（☑）→ 更新 ladder_enabled 数组
+function toggleLadderEnabled(idx, el) {
+  const en = (S.params.ladder_enabled || [true, true, true, true, true]).slice();
+  en[idx] = !!el.checked;
+  _pendingChanges.ladder_enabled = en;
 }
 
 // ── 状态灯 + 参数值（基础账户卡 2×2 开关 + 权益卡操作按钮）──
@@ -2861,8 +2875,9 @@ function updateStatusLights(p, S) {
   const imRate = S.imbalance_rate || 0;
   const imThresh = (p.imbalance_threshold_pct !== undefined ? p.imbalance_threshold_pct : p.imbalance_threshold) || 20;
 
-  // 失衡监控：蓝=未运行，绿=运行，失衡≥阈值→黄预警
-  setDot('sw-adj-dot', !running ? 'blue' : (imRate >= imThresh ? 'yellow' : 'green'));
+  // 失衡监控：蓝=未运行/开关关，绿=运行，失衡≥阈值→黄预警
+  const adjEnabled = p.auto_adjust !== false;
+  setDot('sw-adj-dot', !running || !adjEnabled ? 'blue' : (imRate >= imThresh ? 'yellow' : 'green'));
   const adj = document.getElementById('sw-adj-val');
   if (adj) adj.textContent = imThresh;
 
@@ -3094,10 +3109,11 @@ function switchCalcTab(kind) {
   });
   updatePMFormula(kind);
   updatePMResult(kind);
-  // 同步失衡档位表（ladder_rates 滑块 + ladder_densities 下拉）
+  // 同步失衡档位表（ladder_rates 滑块 + ladder_densities 输入 + ladder_enabled 勾选）
   if (kind === 'imb') {
     const rates = (p.ladder_rates || [40, 50, 60, 70, 80]).slice();
     const dens = (p.ladder_densities || [1.4, 1.0, 0.75, 0.5, 0.3]).slice();
+    const en = (p.ladder_enabled || [true, true, true, true, true]).slice();
     for (let i = 0; i < 5; i++) {
       const rateSl = document.getElementById('mod-lr' + (i + 1));
       const rateLb = document.getElementById('sl-lr' + (i + 1));
@@ -3105,6 +3121,8 @@ function switchCalcTab(kind) {
       if (rateLb) { rateLb.textContent = rates[i] !== undefined ? rates[i] : rateLb.textContent; }
       const denSl = document.getElementById('mod-ld' + (i + 1));
       if (denSl) { denSl.value = String(dens[i] !== undefined ? dens[i] : denSl.value); }
+      const enSl = document.getElementById('mod-lr-en' + (i + 1));
+      if (enSl) { enSl.checked = en[i] !== undefined ? !!en[i] : true; }
     }
   }
 }
@@ -3475,6 +3493,7 @@ setInterval(() => { if (S.inst_id) loadChartData(S.cur_tf || '15m', false); }, 5
   window.onInitChange = onInitChange;
   window.onLadderRateChange = onLadderRateChange;
   window.onLadderChange = onLadderChange;
+  window.toggleLadderEnabled = toggleLadderEnabled;
   window.toggleTimeMode = toggleTimeMode;
   window._chartUTCMode = false;  // 默认本地时间
 
