@@ -42,6 +42,7 @@ def save_state():
         "total_pnl": round(st.total_pnl, 2),
         "total_fee": round(getattr(st, "total_fee", 0), 2),
         "grid_count": st.grid_count,
+        "rebalance_cnt": getattr(st, "rebalance_cnt", 0),
         "long_contracts": st.position.long_contracts,
         "long_avg_px": px_round(st.inst_id, st.position.long_avg_px),
         "long_unrealized_pnl": round(st.position.long_unrealized_pnl, 2),
@@ -178,6 +179,7 @@ def load_state() -> GridState:
         st.total_pnl = data.get("total_pnl", 0)
         st.total_fee = data.get("total_fee", 0)
         st.grid_count = data.get("grid_count", 0)
+        st.rebalance_cnt = data.get("rebalance_cnt", 0)
         st.position.long_contracts = data.get("long_contracts", 0)
         st.position.long_avg_px = data.get("long_avg_px", 0)
         st.position.long_unrealized_pnl = data.get("long_unrealized_pnl", 0)

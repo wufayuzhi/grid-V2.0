@@ -73,6 +73,7 @@ class GridState:
     grid_last_trade_ts: float = 0.0   # 最近一次网格成交时间（12h不成交提醒计时起点）
     grid_12h_push_ts: float = 0.0     # 12h未成交提醒推送时间（防刷屏）
     grid_count: int = 0
+    rebalance_cnt: int = 0   # 失衡回补次数（独立标记，与网格滚动次数分开）
     pending_iceberg: int = 0
 
     # ── 建仓 ──
@@ -243,6 +244,7 @@ class GridState:
             "total_pnl": round(self.total_pnl, 2),
             "total_fee": round(getattr(self, "total_fee", 0), 2),
             "grid_count": self.grid_count,
+            "rebalance_cnt": getattr(self, "rebalance_cnt", 0),
             "grid_upper_px": px_round(self.inst_id, self.grid_upper_px),
             "grid_lower_px": px_round(self.inst_id, self.grid_lower_px),
             "pending_iceberg": self.pending_iceberg,

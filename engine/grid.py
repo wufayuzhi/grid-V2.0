@@ -210,10 +210,28 @@ def backfill_grid_stats(st) -> None:
                 before_ts = items[-1]["ts"]
         except Exception as e:
             logger.warning(f"回填拉账单失败: {e}")
-        # ③ 滚动次数 + 已实现 + 手续费: 账单 subType5/6=平多/平空(权威)
+        # ③ 网格滚动次数：用订单历史数"开空(short sell)"订单 = 每轮上端成交1次滚动。
+        #    对冲网格每轮上端成交=平多+开空(short sell)，下端成交=平空+开多(long buy)。
+        #    失衡回补/调平是单边市价平仓(short buy/long sell)，不会开新仓 → 不计入。
+        #    (每轮恰好含1个开空短卖单，故开空订单数 = 真实滚动次数，排除失衡砍仓)
         roll_cnt = 0
         pnl_total = 0.0
         fee_total = 0.0
+        seen_open = set()
+        for o in orders_desc:
+            if o.get("state") != "filled":
+                continue
+            ts = o.get("cTime") or ""
+            if not ts or int(ts) <= int(start_ts):
+                continue
+            side = o.get("side"); pos = o.get("posSide")
+            # 网格滚动：开空(short+sell) 或 开多(long+buy) 各计半轮；以开空为准(每轮恰好1个)
+            if pos == "short" and side == "sell":
+                k = (ts, o.get("ordId"), o.get("sz"))
+                if k not in seen_open:
+                    seen_open.add(k)
+                    roll_cnt += 1
+        # 已实现收益 + 手续费仍从账单(subType 5/6=平多/平空)权威统计
         seen = set()
         for b in bills:
             ts = b.get("ts", "")

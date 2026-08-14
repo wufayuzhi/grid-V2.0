@@ -835,7 +835,7 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
   <div class="met-cell"><div class="ml">失衡率</div><div class="mv" id="m-ir" style="display:flex;align-items:center;justify-content:center;gap:6px"><span id="m-ir-val">—</span><button id="imb-dot" onclick="dblTapOpen(function(){openParamModal('imb')},this)" title="失衡监控参数" style="width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.15);cursor:pointer;padding:0;flex-shrink:0;background:#10B981"></button></div></div>
   <div class="met-cell"><div class="ml">安全距离</div><div class="mv" id="m-sd">—</div></div>
   <div class="met-cell"><div class="ml">liqPx</div><div class="mv" id="m-liq">—</div></div>
-  <div class="met-cell"><div class="ml">网格</div><div class="mv" id="m-gc">0</div></div>
+  <div class="met-cell"><div class="ml">网格</div><div class="mv" id="m-gc">0</div><div class="mn-sub" id="m-gc-sub" style="font-size:10px;opacity:.65;font-weight:normal;margin-top:2px">—</div></div>
   <div class="met-cell"><div class="ml">净收益</div><div class="mv" id="m-pnl">0.00</div><div class="mn-sub" id="m-pnl-sub" style="font-size:10px;opacity:.65;font-weight:normal;margin-top:2px">—</div></div>
 </div>
 
@@ -2105,6 +2105,8 @@ async function refresh() {
     document.getElementById('m-liq').textContent =
       (longLiq > 0 || shortLiq > 0) ? '✅ 已获取' : '—';
     document.getElementById('m-gc').textContent = S.grid_count || 0;
+    const mGcSub = document.getElementById('m-gc-sub');
+    if (mGcSub) mGcSub.textContent = '回补 ' + (S.rebalance_cnt || 0) + ' 次';
     // 净收益 = 已实现 + 浮盈(动态 upl) − 手续费；浮盈来自当前持仓实时值
     const upnl = (S.long?.unrealized_pnl || 0) + (S.short?.unrealized_pnl || 0);
     const netPnl = (S.total_pnl || 0) + upnl - (S.total_fee || 0);

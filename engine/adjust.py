@@ -149,7 +149,8 @@ def _do_rebalance(st, imbalance):
     r = reduce_position(side, contracts)
     if r.get("status") == "ok":
         st.last_rebalance_ts = now
-        _log(st, f"🔄 [回补] 失衡率={imbalance:.1f}% 减{side} {contracts}张→目标{st.rebalance_target_pct:.0f}%",
+        st.rebalance_cnt = (getattr(st, "rebalance_cnt", 0) or 0) + 1  # 失衡回补次数独立计数
+        _log(st, f"🔄 [回补] 失衡率={imbalance:.1f}% 减{side} {contracts}张→目标{st.rebalance_target_pct:.0f}% (第{st.rebalance_cnt}次)",
              cat="REBAL", data={"imbalance": imbalance, "side": side, "contracts": contracts})
         save_state_lazy(st)
 
