@@ -66,6 +66,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto Sans
 /* 🔹 LAYER 3: CHART */
 .chart-layer{background:var(--card);border-radius:var(--radius);padding:10px;margin-bottom:8px;border:1px solid var(--bd);box-shadow:var(--shadow)}
 .chart-layer .ch-title{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-weight:600;font-size:13px}
+.mob-ch-fullbar{display:none}
 .chart-layer .ch-title .legend{display:flex;gap:10px;margin-left:auto;font-size:10px;font-weight:400}
 .chart-layer .ch-title .legend span{padding:2px 8px;border-radius:4px}
 .chart-layer .ch-title .legend .sweet{background:#DCFCE7;color:var(--green)}
@@ -390,13 +391,76 @@ tr.adj-mixed-cancel td{color:#6566D8}
   table th, table td { padding: 5px 8px; }
   button { font-size: 12px !important; padding: 5px 12px !important; }
 
-  /* ══ 手机端改造（仅≤768px）：K线隐藏 + 滑块收弹窗 + 防误触 ══ */
+  /* ── 移动端顶栏精简：隐藏工具按钮/标记价/24h量/时间模式，只留 logo+状态灯+API速率+运行 ── */
+  .tb-hide-mob { display: none !important; }
+  .topbar { flex-wrap: nowrap; white-space: nowrap; }
+  .topbar .status { font-size: 11px; }
+  #api-latency { color: var(--purple); font-weight: 800; }
 
-  /* 手机端去掉K线，仅保留副行情条 */
+  /* ── 移动端行情栏 2 整行：8格每行4个。minmax(0,1fr) 强制均分屏宽，防交易对/长数值卡片撑破溢出 ── */
+  .mkt-strip { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 4px; }
+  .mkt-cell { min-width: 0; overflow: hidden; }
+  .mkt-cell .ml { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mkt-cell .mv { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+  #mkt-inst-sel { max-width: 100% !important; font-size: 12px !important; }
+
+  /* ── 移动端设置页工具卡片（原顶栏按钮收纳；仅 risk=设置 tab 显示） ── */
+  body[data-tab="risk"] .mob-tools-card { display: block !important; }
+  .mob-tools-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 8px; }
+  .mob-tool-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 6px; border-radius: 10px; border: 1px solid var(--bd); background: var(--card); cursor: pointer; font-size: 11px; font-weight: 600; color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.04); }
+  .mob-tool-btn .t-ic { font-size: 20px; }
+  .mob-tool-btn.api { background: linear-gradient(135deg,var(--purple),#7C3AED); color: #fff; border: none; }
+  .mob-tool-btn.notify { background: linear-gradient(135deg,#3B82F6,#2563EB); color: #fff; border: none; }
+  .mob-tool-btn.screener { background: linear-gradient(135deg,var(--purple),var(--blue)); color: #fff; border: none; }
+  .mob-tool-btn.log { background: #F8FAFC; color: var(--t2); border: 1px solid var(--bd); }
+  .mob-mode-toggle { display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 10px; border: 1px solid var(--bd); background: #F8FAFC; margin-top: 8px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text); }
+  .mob-mode-toggle .mt-state { margin-left: auto; font-size: 11px; font-weight: 700; }
+  .mob-mode-toggle .mt-state.live { color: var(--green); }
+  .mob-mode-toggle .mt-state.demo { color: var(--orange); }
+  .mob-mode-toggle .sw { width: 38px; height: 20px; background: var(--t3); border-radius: 10px; position: relative; transition: all .3s; flex-shrink: 0; }
+  .mob-mode-toggle .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: all .3s; }
+  .mob-mode-toggle .sw.on { background: var(--green); }
+  .mob-mode-toggle .sw.on::after { left: 20px; }
+
+  /* ══ 手机端改造（仅≤768px）：缩略K线 + 滑块收弹窗 + 防误触 ══ */
+
+  /* 手机端竖屏：显示缩略K线（纯K线+限价线，~150px），隐藏标题/指标控制/时间框（全屏时提供） */
   #tab-chart .ch-title,
-  #tab-chart #chart-container,
   #tab-chart .ch-controls,
   #tab-chart .frame-row { display: none !important; }
+  #chart-container { height: 150px !important; }
+  /* 缩略K线 全屏按钮行（PC 隐藏，移动端显示） */
+  .mob-ch-fullbar { display: none; }
+  #tab-chart .mob-ch-fullbar { display: flex; justify-content: flex-end; padding: 4px 2px 6px; }
+  /* 全屏K线 overlay（fixed 占满视口，横屏友好；z-index 高于表格/tabbar，低于参数弹窗） */
+  #mob-ch-fullscreen {
+    position: fixed; inset: 0; z-index: 900; background: #fff;
+    display: none; flex-direction: column;
+  }
+  #mob-ch-fullscreen.open { display: flex; }
+  #mob-ch-fullscreen .fs-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 12px; border-bottom: 1px solid var(--bd); background: var(--card);
+  }
+  #mob-ch-fullscreen .fs-bar .fs-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  #mob-ch-fullscreen .fs-close {
+    background: linear-gradient(135deg,#DC2626,#EF4444); color: #fff; border: none;
+    border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  #mob-ch-fullscreen .fs-tf { display: flex; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--bd); flex-wrap: wrap; }
+  #mob-ch-fullscreen .fs-tf button {
+    border: 1px solid var(--bd); background: var(--card2); color: var(--text);
+    border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+  }
+  #mob-ch-fullscreen .fs-tf button.active {
+    background: linear-gradient(135deg,var(--purple),var(--blue)); color: #fff; border-color: transparent;
+  }
+  #mob-ch-fullscreen .fs-host { flex: 1; min-height: 0; }
+  /* 全屏时图表容器填满 host（autoSize 跟随），只在移动端全屏 overlay 内生效，PC 不受影响 */
+  #mob-ch-fullscreen.open #chart-container { width: 100%; height: 100% !important; }
+  /* 全屏时锁定页面滚动 + 隐藏底部 tabbar（真全屏） */
+  body.mob-fs-open { overflow: hidden; }
+  body.mob-fs-open #mob-tabbar { display: none !important; }
 
   /* 杠杆/安全系数/初始建仓：收进⚙弹窗；在卡片里默认隐藏（JS relocate 进弹窗后由弹窗样式显示） */
   #lev-slider, #sf-slider, #ctrl-init { display: none !important; }
@@ -626,15 +690,16 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
   <span id="demo-badge" class="badge demo">模拟盘</span>
   <span class="api-status"><span class="dot g" id="okx-dot"></span><span id="okx-status">行情正常</span></span>
   <span class="api-status" style="margin-left:4px"><span id="api-latency">API —ms</span></span>
-  <span class="top-val">标记价 <b id="top-px">—</b></span>
-  <span class="top-val">24h量 <b id="top-vol">—</b></span>
-  <button onclick="toggleTimeMode(this)" style="margin-left:8px;background:#3B82F6;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:600;padding:3px 10px;cursor:pointer">本地</button>
-  <div class="toggle-wrap" onclick="toggleSim()" style="cursor:pointer">
+  <span class="top-val tb-hide-mob">标记价 <b id="top-px">—</b></span>
+  <span class="top-val tb-hide-mob">24h量 <b id="top-vol">—</b></span>
+  <button onclick="toggleTimeMode(this)" class="tb-hide-mob" style="margin-left:8px;background:#3B82F6;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:600;padding:3px 10px;cursor:pointer">本地</button>
+  <div class="toggle-wrap tb-hide-mob" onclick="toggleSim()" style="cursor:pointer">
     <span>实盘</span><span id="sim-sw" class="sw"></span><span>模拟</span>
   </div>
-  <button class="btn api" onclick="openApiModal()" title="API密钥设置" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,var(--purple),#7C3AED);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(124,58,237,.3);transition:all .2s"><span style="font-size:14px">🔑</span> API <span id="api-masked-tag" style="font-size:11px;font-weight:400;opacity:.9"></span></button>
-  <button class="btn api" onclick="openWecomConfigModal()" title="企微通知配置" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(59,130,246,.3);transition:all .2s"><span style="font-size:14px">💬</span> 通知 <span id="wc-masked-tag" style="font-size:11px;font-weight:400;opacity:.9"></span></button>
-  <button class="btn log" onclick="showLog()">📋 日志</button>
+  <button class="btn api tb-hide-mob" onclick="openApiModal()" title="API密钥设置" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,var(--purple),#7C3AED);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(124,58,237,.3);transition:all .2s"><span style="font-size:14px">🔑</span> API <span id="api-masked-tag" style="font-size:11px;font-weight:400;opacity:.9"></span></button>
+  <button class="btn api tb-hide-mob" onclick="openWecomConfigModal()" title="企微通知配置" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(59,130,246,.3);transition:all .2s"><span style="font-size:14px">💬</span> 通知 <span id="wc-masked-tag" style="font-size:11px;font-weight:400;opacity:.9"></span></button>
+  <button class="btn log tb-hide-mob" onclick="window.open('/screener/','_blank')" title="网格交易对筛选" style="background:linear-gradient(135deg,var(--purple),var(--blue));color:#fff;border:none">🔍 选币</button>
+  <button class="btn log tb-hide-mob" onclick="showLog()">📋 日志</button>
   <span id="badge-run" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--t2);font-weight:600"><span id="badge-run-dot" style="width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--red);box-shadow:0 0 6px var(--red)"></span><span id="badge-run-txt">停止</span></span>
 </div>
 
@@ -658,6 +723,9 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
     <div class="legend">
       <span class="sweet">止盈</span><span class="warn">熔断</span><span class="risk">爆表</span>
     </div>
+  </div>
+  <div class="mob-ch-fullbar">
+    <button class="btn pri" style="font-size:12px;padding:5px 14px;border-radius:8px;border:none;color:#fff;font-weight:600;cursor:pointer" onclick="openChartFull()">⛶ 全屏K线</button>
   </div>
   <div id="chart-container"></div>
   <div class="ch-controls">
@@ -788,7 +856,7 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
     </div>
     <!-- 状态灯开关 2×2：点按钮=切开关(启/停)，点 ⚙️=弹参数窗 -->
     <div class="sw-grid">
-      <div class="sw-btn" onclick="dblTapOpen(function(){toggleParam('auto_adjust')},this)">
+      <div class="sw-btn" onclick="dblTapOpen(function(){toggleParam('use_rebalance')},this)">
         <div class="sw-top"><span class="dot" id="sw-adj-dot"></span><b>失衡监控</b><span class="sw-opt" onclick="event.stopPropagation();openParamModal('imb')" title="参数">⚙️</span></div>
         <div class="sw-param">失衡阈值 <b id="sw-adj-val">—</b>%</div>
       </div>
@@ -810,6 +878,22 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
       <button class="preset-btn" onclick="applyPreset('conservative',this)" style="padding:4px 10px;border-radius:4px;border:1px solid var(--bd);background:var(--card2);cursor:pointer;font-size:11px">🛡️ 保守</button>
       <button class="preset-btn active" onclick="applyPreset('standard',this)" style="padding:4px 10px;border-radius:4px;border:1px solid var(--bd);background:var(--card2);cursor:pointer;font-size:11px">⚖️ 标准</button>
       <button class="preset-btn" onclick="applyPreset('aggressive',this)" style="padding:4px 10px;border-radius:4px;border:1px solid var(--bd);background:var(--card2);cursor:pointer;font-size:11px">🚀 激进</button>
+    </div>
+  </div>
+  <!-- 移动端设置页工具卡片（PC 隐藏；收纳顶栏的 API/通知/选币/日志 + 实盘/模拟切换） -->
+  <div class="ctrl-card mob-tools-card" data-mob="risk" style="display:none">
+    <div class="cc-title">🛠️ 工具</div>
+    <div class="mob-tools-grid">
+      <button class="mob-tool-btn api" onclick="openApiModal()"><span class="t-ic">🔑</span>API密钥</button>
+      <button class="mob-tool-btn notify" onclick="openWecomConfigModal()"><span class="t-ic">💬</span>通知</button>
+      <button class="mob-tool-btn screener" onclick="window.open('/screener/','_blank')"><span class="t-ic">🔍</span>选币</button>
+      <button class="mob-tool-btn log" onclick="showLog()"><span class="t-ic">📋</span>日志</button>
+    </div>
+    <div class="mob-mode-toggle" onclick="toggleSim()">
+      <span>🔄</span>
+      <span>实盘 / 模拟盘</span>
+      <span class="mt-state live" id="mob-mode-state">实盘</span>
+      <span id="mob-sim-sw" class="sw"></span>
     </div>
   </div>
   <!-- Equity -->
@@ -888,7 +972,7 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
   <button class="act" data-tab="mkt" onclick="mobTab('mkt',this)"><span class="tb-ic">📈</span><span class="tb-lb">行情</span></button>
   <button data-tab="pos" onclick="mobTab('pos',this)"><span class="tb-ic">💼</span><span class="tb-lb">持仓</span></button>
   <button data-tab="trade" onclick="mobTab('trade',this)"><span class="tb-ic">🎯</span><span class="tb-lb">交易</span></button>
-  <button data-tab="risk" onclick="mobTab('risk',this)"><span class="tb-ic">🛡️</span><span class="tb-lb">风控</span></button>
+  <button data-tab="risk" onclick="mobTab('risk',this)"><span class="tb-ic">⚙️</span><span class="tb-lb">设置</span></button>
 </nav>
 
 <!-- ═══════ 手机端防误触二次确认框（通用，仅手机触发）═══════ -->
@@ -958,6 +1042,13 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
       <!-- 📐 网格调仓组（文档§1.2：ATR时间框架/ATR周期/基础密度/密度下限） -->
       <div class="pm-group" id="pmg-grid">
         <div class="pm-left">
+          <div class="sl-row" style="display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,rgba(124,58,237,.12),rgba(59,130,246,.12));border:1px solid rgba(124,58,237,.25);border-radius:8px;padding:8px 10px;margin-bottom:8px">
+            <span style="font-weight:600;color:var(--purple)">▶ 网格自动运行</span>
+            <span class="toggle-wrap" onclick="toggleParam('grid_auto_run')" style="width:auto;padding:2px 8px">
+              <span class="sw" id="sw-grid_auto_run"></span><span id="txt-grid_auto_run" style="font-size:11px;margin-left:2px">开</span>
+            </span>
+          </div>
+          <div class="pm-note" style="margin-bottom:6px">控制网格限价单挂单/自动滚动；关=暂停挂单（失衡率调平不受此开关影响）</div>
           <div class="sl-row"><span>ATR时间框架</span><select id="mod-atr_timeframe" onchange="onModChange('atr_timeframe',this)" style="padding:3px;border:1px solid var(--bd);border-radius:4px">
             <option value="1m">1m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1H" selected>1H</option><option value="4H">4H</option><option value="6H">6H</option><option value="1D">1D</option></select></div>
           <div class="pm-note">网格间距 = ATR% × 当前密度，此时间框架算ATR</div>
@@ -1405,6 +1496,7 @@ let S = {
   params: {}, adjust_history: [], order_history: []
 };
 let chart = null, series = null, lineSeries = {};
+let _chartFullMode = false;   // 手机端是否处于横屏全屏K线模式（true=全屏显示EMA/超级趋势；false=缩略只显示K线+限价线）
 let _adapterTick = 0,   // 最后一次适配器拉取时间戳
     _marketTickers = [], // 从 /api/v1/adapter 缓存的最新 tickers
     _slidersSynced = false,
@@ -1441,6 +1533,36 @@ function fmtPx(v, ts) {
 }
 
 // ═══════════════════ CHART ═══════════════════
+// 统一的 chart resize（按当前模式：全屏=跟随 host、移动端缩略=150px、PC=420）
+function resizeChart(el) {
+  if (!chart) return;
+  if (_chartFullMode) {
+    const host = document.getElementById('chart-full-host');
+    // 用 getBoundingClientRect 取真实渲染尺寸（fixed 容器 clientHeight 在横屏切换时可能滞后/不准）
+    let w = window.innerWidth, h = window.innerHeight;
+    if (host) {
+      const r = host.getBoundingClientRect();
+      if (r.width > 0) w = r.width;
+      if (r.height > 0) h = r.height;
+    }
+    chart.resize(w, h);
+  } else if (isMobile()) {
+    chart.resize(el ? el.clientWidth : window.innerWidth, 150);
+  } else {
+    chart.resize(el ? el.clientWidth : 800, 420);
+  }
+}
+// 全屏模式下延迟重试 resize（等锁横屏/真全屏动画完成后，多次重试取到真实横屏尺寸）
+function resizeChartFullRetry(times) {
+  if (!chart || !_chartFullMode) return;
+  var n = times || 0;
+  if (n > 5) { resizeChart(); chart.timeScale().fitContent(); return; }
+  setTimeout(function () {
+    resizeChart();
+    chart.timeScale().fitContent();
+    resizeChartFullRetry(n + 1);
+  }, 150);
+}
 function initChart() {  const el = document.getElementById('chart-container');  chart = LightweightCharts.createChart(el, {
     width: el.clientWidth || 800, height: 420,
     layout: { background: { color: '#ffffff' }, textColor: '#64748B' },
@@ -1474,7 +1596,114 @@ function initChart() {  const el = document.getElementById('chart-container');  
   lineSeries.st = chart.addLineSeries({ color: '#10B981', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, visible: true, priceScaleId: 'right' });
   lineSeries.ema1 = chart.addLineSeries({ color: '#7C3AED', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, visible: true, priceScaleId: 'right' });
   lineSeries.ema2 = chart.addLineSeries({ color: '#3B82F6', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, visible: true, priceScaleId: 'right' });
-  window.addEventListener('resize', () => chart.resize(el.clientWidth || 800, 420));
+  window.addEventListener('resize', () => resizeChart(el));
+}
+
+// ═══ 手机端 横屏全屏K线（复用同一个 chart 实例，容器搬移到 #chart-full-host 并 resize）═══
+let _chartFullHost = null; // 全屏容器缓存
+function openChartFull() {
+  if (!isMobile()) return;
+  const el = document.getElementById('chart-container');
+  const host = document.getElementById('chart-full-host');
+  if (!el || !host || !chart) return;
+  _chartFullMode = true;
+  // 记录原位（PC/缩略容器 #tab-chart 内），关闭时搬回
+  _chartFullHost = el.parentNode;
+  el.dataset.origIdx = Array.prototype.indexOf.call(_chartFullHost.children, el);
+  host.appendChild(el);                 // 搬进全屏容器
+  document.getElementById('mob-ch-fullscreen').classList.add('open');
+  document.body.classList.add('mob-fs-open');
+  // ① 进入浏览器真全屏（隐藏地址栏/状态栏，更接近横屏观感）
+  try {
+    const docEl = document.documentElement;
+    if (docEl.requestFullscreen) {
+      docEl.requestFullscreen().catch(function(){});
+    } else if (docEl.webkitRequestFullscreen) {
+      docEl.webkitRequestFullscreen();
+    }
+  } catch (e) {}
+  // ② 尝试锁横屏（Android 直接强制横屏；iOS Safari 不支持会静默失败）
+  try {
+    if (window.screen && screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(function(){ _showFsRotateHint(true); });
+    } else {
+      _showFsRotateHint(true);
+    }
+  } catch (e) { _showFsRotateHint(true); }
+  // ③ 全屏显示 EMA + 超级趋势 + 限价线
+  redrawLines();
+  drawLimitLines(window._lastOrders);
+  // ④ 全屏模式：开启 autoSize 让图表自动跟随 host（容器 resize 自动撑满，无时序问题）
+  //    只作用于 chart 实例运行态，PC 端 createChart 不传 autoSize、关闭全屏即恢复
+  try {
+    if (chart.applyOptions) chart.applyOptions({ autoSize: true });
+  } catch (e) {}
+  // 延迟重试 resize：等锁横屏/真全屏完成后取真实横屏尺寸
+  resizeChartFullRetry(0);
+  window.scrollTo(0, 0);
+}
+// iOS 无法锁横屏时显示"旋转手机"引导
+function _showFsRotateHint(show) {
+  var h = document.getElementById('fs-rotate-hint');
+  if (h) h.style.display = show ? 'flex' : 'none';
+}
+// 监听设备旋转：转横屏后重新适配图表尺寸
+window.addEventListener('orientationchange', function () {
+  if (!_chartFullMode) return;
+  var host = document.getElementById('chart-full-host');
+  if (host && chart) {
+    setTimeout(function () {
+      resizeChart();
+      chart.timeScale().fitContent();
+      _showFsRotateHint(false);
+    }, 300);
+  }
+});
+function closeChartFull() {
+  const ov = document.getElementById('mob-ch-fullscreen');
+  const el = document.getElementById('chart-container');
+  if (!ov || !el || !chart) return;
+  ov.classList.remove('open');
+  document.body.classList.remove('mob-fs-open');
+  // ① 退出浏览器全屏
+  try {
+    if (document.exitFullscreen) document.exitFullscreen().catch(function(){});
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+  } catch (e) {}
+  // ② 解锁方向（Android）
+  try {
+    if (window.screen && screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+  } catch (e) {}
+  // ③ 隐藏旋转引导
+  _showFsRotateHint(false);
+  // ④ 关闭 autoSize（恢复缩略模式手动 resize；PC 端不受影响）
+  try {
+    if (chart.applyOptions) chart.applyOptions({ autoSize: false });
+  } catch (e) {}
+  _chartFullMode = false;
+  // 搬回缩略容器原位
+  if (_chartFullHost) {
+    const idx = parseInt(el.dataset.origIdx || '0', 10);
+    _chartFullHost.insertBefore(el, _chartFullHost.children[idx] || null);
+    delete el.dataset.origIdx;
+  }
+  _chartFullHost = null;
+  // 缩略模式：隐藏 EMA/超级趋势，只留 K线+限价线
+  redrawLines();
+  drawLimitLines(window._lastOrders);
+  requestAnimationFrame(function() {
+    const parent = el.parentNode;
+    chart.resize(parent ? parent.clientWidth : window.innerWidth, 150);
+    chart.timeScale().fitContent();
+  });
+}
+// 全屏时间框切换（与 PC setTf 走同一套 S.cur_tf + loadChartData，仅切换 active 高亮）
+function fsSetTf(tf, btn) {
+  document.querySelectorAll('#mob-ch-fullscreen .fs-tf button').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const barMap = { '1m': '1m', '5m': '5m', '15m': '15m', '1h': '1H', '4h': '4H', '6h': '6H', '1D': '1D' };
+  S.cur_tf = barMap[tf] || '15m';
+  loadChartData(S.cur_tf, true);
 }
 
 let lastChartKey = '';          // 上次K线的 币种:时段 标识
@@ -1586,10 +1815,12 @@ function redrawLines(doFit) {
   if (!data || !data.length) return;
 
   // ── SuperTrend：单条线，逐点染色（跟 TradingView 一样）──
-  const showST = document.getElementById('ch-supertrend-m')?.checked;
-  const showBG = document.getElementById('ch-st-bg-m')?.checked;
-  const showE1 = document.getElementById('ch-ema1-m')?.checked;
-  const showE2 = document.getElementById('ch-ema2-m')?.checked;
+  // 移动端缩略模式（未开全屏）：强制隐藏 EMA/超级趋势，只留 K线+限价线；全屏/PC 按开关
+  const thumbHide = isMobile() && !_chartFullMode;
+  const showST = thumbHide ? false : document.getElementById('ch-supertrend-m')?.checked;
+  const showBG = thumbHide ? false : document.getElementById('ch-st-bg-m')?.checked;
+  const showE1 = thumbHide ? false : document.getElementById('ch-ema1-m')?.checked;
+  const showE2 = thumbHide ? false : document.getElementById('ch-ema2-m')?.checked;
 
   if (showST) {
     const stPeriod = parseInt(document.getElementById('mod-st_period')?.value || 10);
@@ -1712,6 +1943,11 @@ async function refresh() {
     document.getElementById('demo-badge').textContent = S.simulated ? '模拟盘' : '实盘';
     document.getElementById('demo-badge').className = 'badge ' + (S.simulated ? 'demo' : 'live');
     document.getElementById('sim-sw').className = 'sw' + (S.simulated ? ' on' : '');
+    // 移动端设置页 实盘/模拟 切换开关同步
+    const _msw = document.getElementById('mob-sim-sw');
+    if (_msw) _msw.className = 'sw' + (S.simulated ? ' on' : '');
+    const _mst = document.getElementById('mob-mode-state');
+    if (_mst) { _mst.textContent = S.simulated ? '模拟盘' : '实盘'; _mst.className = 'mt-state ' + (S.simulated ? 'demo' : 'live'); }
     const _runDot = document.getElementById('badge-run-dot');
     const _runTxt = document.getElementById('badge-run-txt');
     if (S.running && !p.paused) {
@@ -2367,7 +2603,7 @@ function mobTab(tab, btn) {
     b.classList.toggle('act', b.getAttribute('data-tab') === tab);
   });
   // 切换到行情页时触发布局刷新
-  if (tab === 'mkt') setTimeout(function() { if (chart) { chart.resize(); chart.timeScale().fitContent(); } }, 100);
+  if (tab === 'mkt') setTimeout(function() { if (chart) { resizeChart(document.getElementById('chart-container')); chart.timeScale().fitContent(); } }, 100);
 }
 // ═══════ 委托记录 & 调平记录（拉交易所真实数据）═══════
 const GROUP_LABEL = { pingduo_kaikong: '开空平多', pingkong_kaiduo: '开多平空', shrink: '纯缩仓', canceled: '撤销单', other: '其他' };
@@ -2876,11 +3112,18 @@ function updateStatusLights(p, S) {
   const imRate = S.imbalance_rate || 0;
   const imThresh = (p.imbalance_threshold_pct !== undefined ? p.imbalance_threshold_pct : p.imbalance_threshold) || 20;
 
-  // 失衡监控：蓝=未运行/开关关，绿=运行，失衡≥阈值→黄预警
-  const adjEnabled = p.auto_adjust !== false;
+  // 失衡监控：开关=失衡调平(use_rebalance)启用；蓝=未运行/开关关，绿=运行，失衡≥阈值→黄预警
+  const adjEnabled = p.use_rebalance === true;
   setDot('sw-adj-dot', !running || !adjEnabled ? 'blue' : (imRate >= imThresh ? 'yellow' : 'green'));
   const adj = document.getElementById('sw-adj-val');
   if (adj) adj.textContent = imThresh;
+
+  // 网格自动运行：开关=grid_auto_run；蓝=未运行/开关关，绿=运行，紧急拆墙→黄
+  const gRun = p.grid_auto_run !== false;
+  const gRunSw = document.getElementById('sw-grid_auto_run');
+  const gRunTxt = document.getElementById('txt-grid_auto_run');
+  if (gRunSw) gRunSw.classList.toggle('on', gRun);
+  if (gRunTxt) gRunTxt.textContent = gRun ? '开' : '关';
 
   // 冰山委托：蓝=未运行/未启用，绿=运行，有pending冰山头→黄
   const iceEnabled = p.use_iceberg !== false;
@@ -3450,6 +3693,9 @@ setInterval(() => { if (S.inst_id) loadChartData(S.cur_tf || '15m', false); }, 5
   // 导出到全局，让 HTML onclick/onchange 能调用
   window.setTf = setTf;
   window.redrawLines = redrawLines;
+  window.openChartFull = openChartFull;
+  window.closeChartFull = closeChartFull;
+  window.fsSetTf = fsSetTf;
   window.onSTChange = onSTChange;
   window.showLog = showLog;
   window.hideLog = hideLog;
@@ -3540,7 +3786,7 @@ setInterval(() => { if (S.inst_id) loadChartData(S.cur_tf || '15m', false); }, 5
       lineSeries.st = chart.addLineSeries({ color: '#10B981', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, visible: prevVisible.st, priceScaleId: 'right' });
       lineSeries.ema1 = chart.addLineSeries({ color: '#7C3AED', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, visible: prevVisible.ema1, priceScaleId: 'right' });
       lineSeries.ema2 = chart.addLineSeries({ color: '#3B82F6', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, visible: prevVisible.ema2, priceScaleId: 'right' });
-      window.addEventListener('resize', () => chart.resize(el.clientWidth || 800, 420));
+      window.addEventListener('resize', () => resizeChart(el));
       redrawLines();
       drawLimitLines(window._lastOrders);   // 重建后恢复限价委托线
       chart.timeScale().fitContent();
@@ -3560,5 +3806,25 @@ setInterval(() => { if (S.inst_id) loadChartData(S.cur_tf || '15m', false); }, 5
 </script>
 </div><!-- close tab-params -->
 <div id="formula-tooltip" class="formula-tooltip"></div>
+
+<!-- ═══════ 手机端 横屏全屏K线 overlay（仅≤768px 由 openChartFull 打开）═══════ -->
+<div id="mob-ch-fullscreen">
+  <div class="fs-bar">
+    <span class="fs-title">📈 K线图</span>
+    <button class="fs-close" onclick="closeChartFull()">✕ 关闭</button>
+  </div>
+  <div class="fs-tf">
+    <button onclick="fsSetTf('1m',this)">1m</button>
+    <button onclick="fsSetTf('5m',this)">5m</button>
+    <button class="active" onclick="fsSetTf('15m',this)">15m</button>
+    <button onclick="fsSetTf('1h',this)">1h</button>
+    <button onclick="fsSetTf('4h',this)">4h</button>
+    <button onclick="fsSetTf('6h',this)">6h</button>
+    <button onclick="fsSetTf('1D',this)">1D</button>
+    <button onclick="openParamModal('ind')" style="margin-left:auto;border:1px solid var(--bd);background:var(--card2);color:var(--purple);font-weight:600">⚙ 指标</button>
+  </div>
+  <div id="fs-rotate-hint" style="display:none;align-items:center;justify-content:center;gap:8px;padding:10px;color:var(--purple);font-weight:600;font-size:13px;border-bottom:1px solid var(--bd)">↻ 请旋转手机查看横屏K线</div>
+  <div class="fs-host" id="chart-full-host"></div>
+</div>
 </body>
 </html>

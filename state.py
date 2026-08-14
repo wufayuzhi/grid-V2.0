@@ -120,6 +120,7 @@ def save_state():
         "oi_drop_pct": st.oi_drop_pct,
         "oi_lock_base": st.oi_lock_base,
         "auto_adjust": st.auto_adjust,
+        "grid_auto_run": st.grid_auto_run,
         "use_iceberg": st.use_iceberg,
         "use_risk_control": st.use_risk_control,
         "use_bleed_melt": st.use_bleed_melt,
@@ -257,6 +258,7 @@ def load_state() -> GridState:
         st.oi_drop_pct = data.get("oi_drop_pct", -5.0)
         st.oi_lock_base = data.get("oi_lock_base", 5)
         st.auto_adjust = data.get("auto_adjust", True)
+        st.grid_auto_run = data.get("grid_auto_run", True)
         st.use_iceberg = data.get("use_iceberg", True)
         st.use_risk_control = data.get("use_risk_control", True)
         st.use_bleed_melt = data.get("use_bleed_melt", True)

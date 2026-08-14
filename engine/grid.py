@@ -630,7 +630,7 @@ def check_grid_tick(st) -> None:
     """
     if not st.running or st.paused:
         return
-    if not getattr(st, "auto_adjust", True):
+    if not getattr(st, "grid_auto_run", True):
         return
     from data.exchange import get_auth_client
     client = get_auth_client()
@@ -802,7 +802,7 @@ def _maybe_auto_rehang(st, client, pending_ids) -> None:
     计时起点 = 最近一次成交时间 grid_last_trade_ts（每笔成交更新）；从未成交则用挂单时间。
     撤单走 _cancel_orders 安全保险（只撤未成交、只撤本引擎 clOrdId 的单）。
     """
-    if not getattr(st, "auto_adjust", True):
+    if not getattr(st, "grid_auto_run", True):
         return
     placed = getattr(st, "grid_placed_ts", 0.0) or 0.0
     if placed <= 0:

@@ -106,6 +106,7 @@ class GridState:
     oi_lock_base: int = 5
     # 开关
     auto_adjust: bool = True
+    grid_auto_run: bool = True   # 网格自动运行（挂单）总开关，与失衡率解耦（2026-08-14）
     use_iceberg: bool = True
     use_risk_control: bool = True
     use_bleed_melt: bool = True

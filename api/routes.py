@@ -1635,7 +1635,7 @@ def register_routes(app: FastAPI):
         calc_recalc = False
         changed = {}   # 记录值真正变化的键 → 旧值（2026-08-13 修复：原用 k in req 恒真）
         for k in ["capital", "reserved_capital", "leverage", "imbalance_threshold",
-                  "iceberg_sz", "pxVar", "auto_adjust", "use_iceberg",
+                  "iceberg_sz", "pxVar", "auto_adjust", "grid_auto_run", "use_iceberg",
                   "use_risk_control", "use_bleed_melt", "use_rebalance",
                   "safety_factor", "shrink_pct", "oi_spike_pct", "oi_drop_pct",
                   "oi_lock_base", "bleed_threshold_pct",
