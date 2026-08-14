@@ -599,6 +599,10 @@ class W2PrefixAndCacheMiddleware:
 # ══════════════════════════════════════════════════════════════════
 #  路由注册
 # ══════════════════════════════════════════════════════════════════
+# K线缓存：{inst: {bar: {"data": [...], "ts": float}}} — 1秒增量刷新时短缓存复用
+_CANDLE_CACHE: dict = {}
+
+
 def register_routes(app: FastAPI):
     """在 FastAPI app 上注册所有路由（返回 app）。"""
 
@@ -807,15 +811,37 @@ def register_routes(app: FastAPI):
 
     # ─── K线 ───
     @app.get("/api/v1/candles")
-    async def get_candles(inst_id: str = "", bar: str = "15m", limit: int = 100):
+    async def get_candles(inst_id: str = "", bar: str = "15m", limit: int = 100,
+                          after: int = 0):
+        """K线：支持增量拉取 + 短缓存。
+        - limit>0 全量拉最近N根（切币种/时段初始化用）
+        - after>0  增量：只返回该时间戳之后的K线（前端1秒刷新用，省流量省OKX请求）
+        缓存：同 key 5秒内复用，避免1秒刷新每次都直调OKX。
+        """
         st = get_state()
         inst = inst_id or getattr(st, "inst_id", "")
         if not inst:
             return {"status": "error", "msg": "未选择交易对"}
+        import time as _t
+        cache = _CANDLE_CACHE.get(inst, {}).get(bar)
+        now = _t.time()
         try:
+            if after > 0 and cache:
+                # 增量：从缓存取，只返回 after 之后的新K线（data 倒序，最新在前）
+                new_items = [c for c in cache["data"] if int(c[0]) > after]
+                return {"status": "ok", "data": new_items}
+            if cache and now - cache["ts"] < 5:
+                return {"status": "ok", "data": cache["data"]}
             data = _get_client().get_candles(inst, bar, limit)
         except Exception as e:
             return {"status": "error", "msg": str(e)}
+        # 更新缓存（保留已有 + 新拉，按时间戳去重合并，避免增量间隙丢K线）
+        if cache:
+            merged = {c[0]: c for c in cache["data"]}
+            for c in data:
+                merged[c[0]] = c
+            data = sorted(merged.values(), key=lambda x: int(x[0]), reverse=True)[:max(limit, 300)]
+        _CANDLE_CACHE.setdefault(inst, {})[bar] = {"data": data, "ts": now}
         return {"status": "ok", "data": data}
 
     # ─── 日志 ───
