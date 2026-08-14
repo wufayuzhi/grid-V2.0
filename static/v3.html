@@ -129,8 +129,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto Sans
 .sw-opt{margin-left:auto;cursor:pointer;font-size:11px;opacity:.7;padding:0 2px}
 .sw-opt:hover{opacity:1}
 .sw-param{font-size:10px;color:var(--t3);margin-top:4px;padding-left:0}
-.sw-param .sw-set{margin-left:8px;font-size:12px;font-weight:600;padding:4px 14px;border-radius:6px;border:1px solid var(--purple);background:#F6F3FF;cursor:pointer;color:var(--purple)}
-.sw-param .sw-set:hover{border-color:var(--purple);background:#E9E0FF}
+.sw-top .sw-set{margin-left:auto;font-size:12px;font-weight:600;padding:5px 16px;border-radius:6px;border:1px solid var(--purple);background:#F6F3FF;cursor:pointer;color:var(--purple);flex-shrink:0}
+.sw-top .sw-set:hover{border-color:var(--purple);background:#E9E0FF}
 .sw-top .sw-tgl{width:36px;height:20px;background:var(--t3);border-radius:11px;position:relative;cursor:pointer;transition:all .25s;flex-shrink:0}
 .sw-top .sw-tgl .sw-tgl-knob{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:all .25s}
 .sw-top .sw-tgl.on{background:var(--purple)}
@@ -862,20 +862,20 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
     <!-- 状态灯开关 2×2：点按钮=切开关(启/停)，点 ⚙️=弹参数窗 -->
     <div class="sw-grid">
       <div class="sw-btn">
-        <div class="sw-top"><span class="dot" id="sw-adj-dot"></span><b>失衡监控</b><span class="sw-tgl" id="sw-adj-tgl" onclick="toggleParam('use_rebalance')"><span class="sw-tgl-knob"></span></span></div>
-        <div class="sw-param">失衡阈值 <b id="sw-adj-val">—</b>% <button class="sw-set" onclick="openParamModal('imb')">设置</button></div>
+        <div class="sw-top"><span class="dot" id="sw-adj-dot"></span><b>失衡监控</b><span class="sw-tgl" id="sw-adj-tgl" onclick="toggleParam('use_rebalance')"><span class="sw-tgl-knob"></span></span><button class="sw-set" onclick="openParamModal('imb')">设置</button></div>
+        <div class="sw-param">失衡阈值 <b id="sw-adj-val">—</b>%</div>
       </div>
       <div class="sw-btn">
-        <div class="sw-top"><span class="dot" id="sw-ice-dot"></span><b>冰山委托</b><span class="sw-tgl" id="sw-ice-tgl" onclick="toggleParam('use_iceberg')"><span class="sw-tgl-knob"></span></span></div>
-        <div class="sw-param">单笔 <b id="sw-ice-val">—</b> 张 <button class="sw-set" onclick="openParamModal('ice')">设置</button></div>
+        <div class="sw-top"><span class="dot" id="sw-ice-dot"></span><b>冰山委托</b><span class="sw-tgl" id="sw-ice-tgl" onclick="toggleParam('use_iceberg')"><span class="sw-tgl-knob"></span></span><button class="sw-set" onclick="openParamModal('ice')">设置</button></div>
+        <div class="sw-param">单笔 <b id="sw-ice-val">—</b> 张</div>
       </div>
       <div class="sw-btn">
-        <div class="sw-top"><span class="dot" id="sw-risk-dot"></span><b>风控启用</b><span class="sw-tgl" id="sw-risk-tgl" onclick="toggleParam('use_risk_control')"><span class="sw-tgl-knob"></span></span></div>
-        <div class="sw-param">安全系数 <b id="sw-risk-val">—</b> <button class="sw-set" onclick="openParamModal('risk')">设置</button></div>
+        <div class="sw-top"><span class="dot" id="sw-risk-dot"></span><b>风控启用</b><span class="sw-tgl" id="sw-risk-tgl" onclick="toggleParam('use_risk_control')"><span class="sw-tgl-knob"></span></span><button class="sw-set" onclick="openParamModal('risk')">设置</button></div>
+        <div class="sw-param">安全系数 <b id="sw-risk-val">—</b></div>
       </div>
       <div class="sw-btn">
-        <div class="sw-top"><span class="dot" id="sw-bleed-dot"></span><b>失血熔断</b><span class="sw-tgl" id="sw-bleed-tgl" onclick="toggleParam('use_bleed_melt')"><span class="sw-tgl-knob"></span></span></div>
-        <div class="sw-param">失血阈值 <b id="sw-bleed-val">—</b>% <button class="sw-set" onclick="openParamModal('bleed')">设置</button></div>
+        <div class="sw-top"><span class="dot" id="sw-bleed-dot"></span><b>失血熔断</b><span class="sw-tgl" id="sw-bleed-tgl" onclick="toggleParam('use_bleed_melt')"><span class="sw-tgl-knob"></span></span><button class="sw-set" onclick="openParamModal('bleed')">设置</button></div>
+        <div class="sw-param">失血阈值 <b id="sw-bleed-val">—</b>%</div>
       </div>
     </div>
     <!-- 快速预设 -->
