@@ -3683,8 +3683,8 @@ initInsts().then(() => {
 setInterval(refresh, 3000);
 setTimeout(() => loadChartData(), 1000);
 setTimeout(() => updateTrend(), 1500);
-// K线实时刷新——每5秒重拉当前时间框最新K线（保持用户缩放/滚动视图，不重置）
-setInterval(() => { if (S.inst_id) loadChartData(S.cur_tf || '15m', false); }, 5000);
+// K线实时刷新——每3秒重拉当前时间框最新K线（保持用户缩放/滚动视图，不重置）
+setInterval(() => { if (S.inst_id) loadChartData(S.cur_tf || '15m', false); }, 3000);
 // （手机端 init 已由顶层 DOMContentLoaded 触发，见 function main 之前）
 
   // 杠杆滑块松开时保存到服务端 + 模态框点击关闭
