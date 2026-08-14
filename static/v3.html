@@ -1727,9 +1727,10 @@ async function loadChartData(bar, fit, incremental) {
   const key = (S.inst_id || '') + ':' + tf;
   try {
     let url = `${API_BASE}/api/v1/candles?inst_id=${S.inst_id}&bar=${tf}&limit=200`;
-    // 增量刷新：只拉最后已知K线之后的新数据（1秒刷新省流量/省后端OKX请求）
+    // 增量刷新：回退一根时段间距，确保返回当前未收盘K线（ts不变但价格在变）
     if (incremental && lastKlineData && key === lastChartKey) {
-      const lastT = lastKlineData[lastKlineData.length - 1].time * 1000;
+      const barMs = { '1m': 60000, '5m': 300000, '15m': 900000, '1H': 3600000, '4H': 14400000, '6H': 21600000, '1D': 86400000 }[tf] || 900000;
+      const lastT = (lastKlineData[lastKlineData.length - 1].time * 1000) - barMs;
       url += `&after=${lastT}`;
     }
     const r = await fetch(url);

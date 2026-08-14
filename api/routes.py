@@ -826,9 +826,17 @@ def register_routes(app: FastAPI):
         cache = _CANDLE_CACHE.get(inst, {}).get(bar)
         now = _t.time()
         try:
-            if after > 0 and cache:
-                # 增量：从缓存取，只返回 after 之后的新K线（data 倒序，最新在前）
-                new_items = [c for c in cache["data"] if int(c[0]) > after]
+            if after > 0:
+                # 增量：直调OKX拿最新（当前未收盘K线每秒都在变，不能走5秒缓存），
+                # 只返回 after 之后的新K线，数据量小。同时把新K线合并进缓存保留历史。
+                data = _get_client().get_candles(inst, bar, 5)
+                if cache:
+                    merged = {c[0]: c for c in cache["data"]}
+                    for c in data:
+                        merged[c[0]] = c
+                    data = sorted(merged.values(), key=lambda x: int(x[0]), reverse=True)[:300]
+                _CANDLE_CACHE.setdefault(inst, {})[bar] = {"data": data, "ts": now}
+                new_items = [c for c in data if int(c[0]) > after]
                 return {"status": "ok", "data": new_items}
             if cache and now - cache["ts"] < 5:
                 return {"status": "ok", "data": cache["data"]}
