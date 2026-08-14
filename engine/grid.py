@@ -364,6 +364,10 @@ def calc_grid_levels(st) -> tuple[float, float]:
     imbalance = calc_imbalance_rate(pos.long_contracts, pos.short_contracts)
     heavy, _ = _heavy_side(st)
     # 无持仓或完全对冲 → 不判定状态，用模式base密度、bePx夹逼
+    # 档位密度实时生效（2026-08-14 用户定案）：失衡率 ≥ 任一启用档位阈值 → 立即用该档密度缩窄。
+    # _ladder_density 内部：未达档位取 base_density，达到档位取该档密度（勾选才参与）。
+    # 回补后失衡率回落到某档 → 自动落到该档密度（如回补到40% → 落回档1密度）。
+    # 紧急(单边防御)与正常共用同一套档位密度；紧急只影响"单向成交模式"判定，不影响密度选择。
     if heavy is None:
         density = _mode_base_density(st)
         emergency = False
@@ -381,10 +385,7 @@ def calc_grid_levels(st) -> tuple[float, float]:
                              float(getattr(st, "one_way_threshold", 60.0) or 60.0), heavy)
             except Exception as e:
                 logger.debug(f"notify_imbalance: {e}")
-        if emergency:
-            density = min(_mode_base_density(st), _ladder_density(st, imbalance))
-        else:
-            density = _mode_base_density(st)
+        density = _ladder_density(st, imbalance)
 
     # 间距 = ATR% × 当前网格密度。ATR未就绪时回退到可调间距参数。
     atr = getattr(st, "atr_abs", 0.0) or 0.0
@@ -532,6 +533,8 @@ def place_grid_orders(st) -> dict:
     upper_ids, lower_ids = [], []
 
     upper, lower = calc_grid_levels(st)
+    # 记录挂单时的实际密度（档位密度实时生效用）：独立字段，不被 _refresh_grid_display 覆盖
+    st.grid_placed_density = round(getattr(st, "current_density", 0.0) or 0.0, 3)
     n = _grid_step_contracts(st)
 
     # 成交模式：单向只挂平重仓侧
@@ -753,8 +756,22 @@ def check_grid_tick(st) -> None:
         place_grid_orders(st)
         return
 
-    # 两侧都在挂单等待中，什么都不做（除非超时未成交 → 自动重挂）
-    # 改动7：24h不成交自动重挂（系统自动做，不二次确认；撤单走安全保险只撤未成交单）
+    # 两侧都在挂单等待中：① 失衡率跨档实时重挂（档位密度实时生效）② 超时未成交自动重挂
+    # 改动：档位密度实时生效（2026-08-14）——当前失衡率对应档位密度 ≠ 挂单时密度 → 撤单按新密度重挂
+    try:
+        from formulas.safety import calc_imbalance_rate
+        _imb_now = calc_imbalance_rate(st.position.long_contracts, st.position.short_contracts)
+        _dens_now = _ladder_density(st, _imb_now)
+        # grid_placed_density 在挂单时由 place_grid_orders 记录（不被 _refresh_grid_display 覆盖）
+        _dens_placed = getattr(st, "grid_placed_density", None)
+        # 若跨档导致密度变化 → 实时重挂
+        if _dens_placed is not None and abs(_dens_now - _dens_placed) > 1e-9:
+            _log(st, f"⚙ 失衡跨档 密度 {_dens_placed}→{_dens_now} → 实时撤单重挂", cat="GRID")
+            place_grid_orders(st)
+            return
+    except Exception as e:
+        logger.debug(f"失衡跨档重挂检测: {e}")
+    # 24h不成交自动重挂（系统自动做，不二次确认；撤单走安全保险只撤未成交单）
     _maybe_auto_rehang(st, client, pending_ids)
     # 每 tick 刷新展示字段（ATR%/密度/间距/挂单价），清除旧残留，前端永远显示当前真实值
     _refresh_grid_display(st)
@@ -780,8 +797,15 @@ def _refresh_grid_display(st) -> None:
             sa = pos.short_avg_px or 0.0
             anchor = (la + sa) / 2 if (la > 0 and sa > 0) else (pos.last_px or pos.mark_px)
         atr = getattr(st, "atr_abs", 0.0) or 0.0
+        # 展示密度 = 实际挂单用的档位密度（与 calc_grid_levels/place_grid_orders 一致，防止前端显示≠实际挂单）
+        try:
+            from formulas.safety import calc_imbalance_rate
+            _imb_disp = calc_imbalance_rate(pos.long_contracts, pos.short_contracts)
+            _density_disp = _ladder_density(st, _imb_disp)
+        except Exception:
+            _density_disp = _mode_base_density(st)
         if atr > 0 and anchor > 0:
-            spacing = grid_spacing_pct(atr, anchor, _mode_base_density(st))
+            spacing = grid_spacing_pct(atr, anchor, _density_disp)
         else:
             spacing = getattr(st, "target_spacing_pct", 0.6) or 0.6
         upper = anchor * (1 + spacing / 100)
@@ -789,7 +813,7 @@ def _refresh_grid_display(st) -> None:
         st.grid_spacing_pct = round(spacing, 2)
         st.grid_upper_px = px_round(st.inst_id, upper)
         st.grid_lower_px = px_round(st.inst_id, lower)
-        st.current_density = round(_mode_base_density(st), 3)
+        st.current_density = round(_density_disp, 3)
         # 注意：这里不写 st.grid_anchor_px —— 锚点只允许在 建仓/成交 时更新，防市价污染。
     except Exception as e:
         logger.debug(f"_refresh_grid_display: {e}")

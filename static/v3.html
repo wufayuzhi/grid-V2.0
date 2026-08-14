@@ -733,7 +733,6 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
     <span class="zone-readout">
       <span class="zr-sweet">止盈 <b id="zr-tp">—</b></span>
       <span class="zr-warn">熔断 <b id="zr-bleed">—</b></span>
-      <span class="zr-risk">爆表 <b id="zr-blowup">—</b></span>
     </span>
   </div>
   <div class="frame-row">
@@ -1082,13 +1081,6 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
           <input type="range" class="mod-slider" id="mod-shrink_pct" min="5" max="30" step="1" value="10" oninput="onModChange('shrink_pct',this)">
           <div class="pm-note">预警区每次缩仓的百分比（哪边重缩哪边）</div>
           <div class="pm-div"></div>
-          <div class="sl-row"><span>失衡爆表%</span><span class="sl-val" id="sl-imbalance_blowup_pct">70</span></div>
-          <input type="range" class="mod-slider" id="mod-imbalance_blowup_pct" min="50" max="90" step="1" value="70" oninput="onModChange('imbalance_blowup_pct',this)">
-          <div class="pm-note">失衡率 ≥ 此值时 防御优先（防堆反向仓）</div>
-          <div class="sl-row"><span>回补目标%</span><span class="sl-val" id="sl-rebalance_target_pct">10</span></div>
-          <input type="range" class="mod-slider" id="mod-rebalance_target_pct" min="5" max="20" step="1" value="10" oninput="onModChange('rebalance_target_pct',this)">
-          <div class="pm-note">回补到目标失衡率（追利润/降风险）</div>
-          <div class="pm-div"></div>
           <div class="sl-row"><span>累计回撤阈值%</span><span class="sl-val" id="sl-cumulative_drawdown_threshold">5</span></div>
           <input type="range" class="mod-slider" id="mod-cumulative_drawdown_threshold" min="3" max="15" step="1" value="5" oninput="onModChange('cumulative_drawdown_threshold',this)">
           <div class="pm-note">高水位峰值upl回撤 ≥ 此% 时全平（慢速阴跌兜底）</div>
@@ -1106,9 +1098,12 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
       <!-- ⚖ 失衡监控组 -->
       <div class="pm-group" id="pmg-imb">
         <div class="pm-left">
-          <div class="sl-row"><span>失衡触发%</span><span class="sl-val" id="sl-imbalance_threshold_pct">20</span></div>
-          <input type="range" class="mod-slider" id="mod-imbalance_threshold_pct" min="5" max="50" step="1" value="20" oninput="onModChange('imbalance_threshold_pct',this)">
-          <div class="pm-note">失衡率 ≥ 此% 时触发调平干预（重仓侧优先处理）</div>
+          <div class="sl-row"><span>回补触发%</span><span class="sl-val" id="sl-imbalance_threshold_pct">80</span></div>
+          <input type="range" class="mod-slider" id="mod-imbalance_threshold_pct" min="0" max="100" step="1" value="80" oninput="onModChange('imbalance_threshold_pct',this)">
+          <div class="pm-note">失衡率 ≥ 此% 时触发失衡回补（市价减重仓侧）</div>
+          <div class="sl-row" style="margin-top:8px"><span>回补目标%</span><span class="sl-val" id="sl-rebalance_target_pct">40</span></div>
+          <input type="range" class="mod-slider" id="mod-rebalance_target_pct" min="0" max="100" step="1" value="40" oninput="onModChange('rebalance_target_pct',this)">
+          <div class="pm-note">回补到目标失衡率（须 &lt; 触发%，如80%→40%）</div>
           <div class="sl-row" style="margin-top:8px">
             <span>失衡回补(B)</span>
             <span class="toggle-wrap" onclick="toggleParam('use_rebalance')" style="width:auto;padding:2px 8px">
@@ -1137,15 +1132,15 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
             <option value="2.5"></option><option value="3.0"></option>
           </datalist>
           <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en1" onchange="toggleLadderEnabled(0,this)" style="width:auto"><span>档1失衡率%</span><span class="sl-val" id="sl-lr1">40</span><span style="margin-left:8px">密度</span><input list="ladder-dens-list" id="mod-ld1" onchange="onLadderChange(0,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
-          <input type="range" class="mod-slider" id="mod-lr1" min="30" max="90" step="1" value="40" oninput="onLadderRateChange(0,this)">
+          <input type="range" class="mod-slider" id="mod-lr1" min="0" max="100" step="1" value="40" oninput="onLadderRateChange(0,this)">
           <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en2" onchange="toggleLadderEnabled(1,this)" style="width:auto"><span>档2失衡率%</span><span class="sl-val" id="sl-lr2">50</span><span style="margin-left:8px">密度</span><input list="ladder-dens-list" id="mod-ld2" onchange="onLadderChange(1,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
-          <input type="range" class="mod-slider" id="mod-lr2" min="30" max="90" step="1" value="50" oninput="onLadderRateChange(1,this)">
+          <input type="range" class="mod-slider" id="mod-lr2" min="0" max="100" step="1" value="50" oninput="onLadderRateChange(1,this)">
           <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en3" onchange="toggleLadderEnabled(2,this)" style="width:auto"><span>档3失衡率%</span><span class="sl-val" id="sl-lr3">60</span><span style="margin-left:8px">密度</span><input list="ladder-dens-list" id="mod-ld3" onchange="onLadderChange(2,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
-          <input type="range" class="mod-slider" id="mod-lr3" min="30" max="90" step="1" value="60" oninput="onLadderRateChange(2,this)">
+          <input type="range" class="mod-slider" id="mod-lr3" min="0" max="100" step="1" value="60" oninput="onLadderRateChange(2,this)">
           <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en4" onchange="toggleLadderEnabled(3,this)" style="width:auto"><span>档4失衡率%</span><span class="sl-val" id="sl-lr4">70</span><span style="margin-left:8px">密度</span><input list="ladder-dens-list" id="mod-ld4" onchange="onLadderChange(3,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
-          <input type="range" class="mod-slider" id="mod-lr4" min="30" max="90" step="1" value="70" oninput="onLadderRateChange(3,this)">
+          <input type="range" class="mod-slider" id="mod-lr4" min="0" max="100" step="1" value="70" oninput="onLadderRateChange(3,this)">
           <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en5" onchange="toggleLadderEnabled(4,this)" style="width:auto"><span>档5失衡率%</span><span class="sl-val" id="sl-lr5">80</span><span style="margin-left:8px">密度</span><input list="ladder-dens-list" id="mod-ld5" onchange="onLadderChange(4,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
-          <input type="range" class="mod-slider" id="mod-lr5" min="30" max="90" step="1" value="80" oninput="onLadderRateChange(4,this)">
+          <input type="range" class="mod-slider" id="mod-lr5" min="0" max="100" step="1" value="80" oninput="onLadderRateChange(4,this)">
           <div class="sl-row"><span>确认时间T(s)</span><span class="sl-val" id="sl-confirm_time">30</span></div>
           <input type="range" class="mod-slider" id="mod-confirm_time" min="10" max="120" step="1" value="30" oninput="onModChange('confirm_time',this)">
           <div class="pm-note">进入/退出紧急需持续此秒数（防抖动跳变）</div>
@@ -1890,14 +1885,11 @@ function updateZoneReadout() {
   const p = S.params || {};
   const tp = p.tp_base_pct || 1.0;
   const bl = p.bleed_threshold_pct || 3.0;
-  const bp = p.imbalance_blowup_pct || 70;
   const imb = S.imbalance_rate || 0;
   const tpEl = document.getElementById('zr-tp');
   const bleedEl = document.getElementById('zr-bleed');
-  const blowEl = document.getElementById('zr-blowup');
   if (tpEl) tpEl.textContent = eq > 0 ? (eq * tp / 100).toFixed(0) + 'U' : '—';
   if (bleedEl) bleedEl.textContent = eq > 0 ? (eq * bl / 100).toFixed(0) + 'U' : '—';
-  if (blowEl) blowEl.textContent = bp + '%' + (imb >= bp ? '⚠' : '');
 }
 
 function setTf(tf, el) {
@@ -2032,7 +2024,6 @@ async function refresh() {
         ['mod-oi_lock_base','oi_lock_base'],
         ['mod-iceberg_sz','iceberg_sz'],
         ['mod-pxVar','pxVar'],
-        ['mod-imbalance_blowup_pct','imbalance_blowup_pct'],
         ['mod-rebalance_target_pct','rebalance_target_pct'],
         ['mod-adjust_split_ratio','adjust_split_ratio'],
         ['mod-tp_base_pct','tp_base_pct'],
@@ -3305,9 +3296,9 @@ function onSTChange() {
 // ═══════════════════ PARAM MODALS ═══════════════════
 const PM_KEYS = {
   grid: ['base_density','density_min','atr_timeframe','atr_period','adj_ratio'],
-  risk: ['safety_factor','shrink_pct','imbalance_blowup_pct','rebalance_target_pct',
+  risk: ['safety_factor','shrink_pct',
          'cumulative_drawdown_threshold','safety_flat_threshold'],
-  imb:  ['imbalance_threshold_pct','oi_spike_pct','oi_drop_pct','oi_lock_base',
+  imb:  ['imbalance_threshold_pct','rebalance_target_pct','oi_spike_pct','oi_drop_pct','oi_lock_base',
          'one_way_threshold','confirm_time','exit_buffer','debounce_loss_line','debounce_profit_line',
          'lr1','lr2','lr3','lr4','lr5','ld1','ld2','ld3','ld4','ld5'],
   ice:  ['iceberg_sz','pxVar'],
@@ -3317,8 +3308,8 @@ const PM_KEYS = {
 };
 const PM_MAP = {
   grid: { fm: 'pm-fm-grid_spacing', sliders: [['mod-base_density','sl-base_density','base_density'],['mod-density_min','sl-density_min','density_min'],['mod-atr_timeframe','sl-atr_timeframe','atr_timeframe'],['mod-atr_period','sl-atr_period','atr_period']] },
-  risk: { fm: 'pm-fm-effective_params', sliders: [['mod-safety_factor','sl-safety_factor','safety_factor'],['mod-shrink_pct','sl-shrink_pct','shrink_pct'],['mod-imbalance_blowup_pct','sl-imbalance_blowup_pct','imbalance_blowup_pct'],['mod-rebalance_target_pct','sl-rebalance_target_pct','rebalance_target_pct'],['mod-cumulative_drawdown_threshold','sl-cumulative_drawdown_threshold','cumulative_drawdown_threshold'],['mod-safety_flat_threshold','sl-safety_flat_threshold','safety_flat_threshold']] },
-  imb:  { fm: '', sliders: [['mod-imbalance_threshold_pct','sl-imbalance_threshold_pct','imbalance_threshold_pct'],['mod-oi_spike_pct','sl-oi_spike_pct','oi_spike_pct'],['mod-oi_drop_pct','sl-oi_drop_pct','oi_drop_pct'],['mod-oi_lock_base','sl-oi_lock_base','oi_lock_base'],['mod-one_way_threshold','sl-one_way_threshold','one_way_threshold'],['mod-confirm_time','sl-confirm_time','confirm_time'],['mod-exit_buffer','sl-exit_buffer','exit_buffer'],['mod-debounce_loss_line','sl-debounce_loss_line','debounce_loss_line'],['mod-debounce_profit_line','sl-debounce_profit_line','debounce_profit_line']] },
+  risk: { fm: 'pm-fm-effective_params', sliders: [['mod-safety_factor','sl-safety_factor','safety_factor'],['mod-shrink_pct','sl-shrink_pct','shrink_pct'],['mod-cumulative_drawdown_threshold','sl-cumulative_drawdown_threshold','cumulative_drawdown_threshold'],['mod-safety_flat_threshold','sl-safety_flat_threshold','safety_flat_threshold']] },
+  imb:  { fm: '', sliders: [['mod-imbalance_threshold_pct','sl-imbalance_threshold_pct','imbalance_threshold_pct'],['mod-rebalance_target_pct','sl-rebalance_target_pct','rebalance_target_pct'],['mod-oi_spike_pct','sl-oi_spike_pct','oi_spike_pct'],['mod-oi_drop_pct','sl-oi_drop_pct','oi_drop_pct'],['mod-oi_lock_base','sl-oi_lock_base','oi_lock_base'],['mod-one_way_threshold','sl-one_way_threshold','one_way_threshold'],['mod-confirm_time','sl-confirm_time','confirm_time'],['mod-exit_buffer','sl-exit_buffer','exit_buffer'],['mod-debounce_loss_line','sl-debounce_loss_line','debounce_loss_line'],['mod-debounce_profit_line','sl-debounce_profit_line','debounce_profit_line']] },
   ice:  { fm: 'pm-fm-iceberg', sliders: [['mod-iceberg_sz','sl-iceberg_sz','iceberg_sz'],['mod-pxVar','sl-pxVar','pxVar']] },
   bleed:{ fm: '', sliders: [['mod-bleed_threshold_pct','sl-bleed_threshold_pct','bleed_threshold_pct'],['mod-bleed_window_sec','sl-bleed_window_sec','bleed_window_sec'],['mod-equity_history_window_sec','sl-equity_history_window_sec','equity_history_window_sec']] },
   ind:  { fm: 'pm-fm-zone',    sliders: [['mod-tp_base_pct','sl-tp_base_pct','tp_base_pct'],['mod-tp_window_hours','sl-tp_window_hours','tp_window_hours']] },
@@ -3473,16 +3464,11 @@ function updatePMResult(kind) {
   } else if (kind === 'risk') {
     const sf = g('mod-safety_factor') || 0.7;
     const sk = g('mod-shrink_pct') || 10;
-    const bp = g('mod-imbalance_blowup_pct') || 70;
-    const rt = g('mod-rebalance_target_pct') || 10;
     const sl = S.singleLimit || 0;
     const oneSide = Math.max(lC, sC);
     h = _pmRow('安全开仓参考', sl > 0 ? (Math.floor(sl * sf)) + ' 张' : '—', true);
     h += _pmRow('预警缩仓量(单边×' + sk + '%)', (oneSide * sk / 100).toFixed(1) + ' 张');
     h += _pmRow('当前失衡率', imb.toFixed(1) + '%');
-    h += _pmRow('失衡爆表线', bp + '%', imb >= bp);
-    h += _pmRow(imb >= bp ? '⚠️ 已爆表' : '距爆表还差', imb >= bp ? (imb - bp).toFixed(1) + '%' : (bp - imb).toFixed(1) + '%');
-    h += _pmRow('回补目标失衡率', rt + '%');
     h += _pmRow('当前单边持仓', oneSide + ' 张');
     h += _pmRow('当前总权益', eq.toFixed(1) + ' USDT');
   } else if (kind === 'bleed') {
@@ -3495,13 +3481,15 @@ function updatePMResult(kind) {
     h += _pmRow('权益采样窗口', ew + ' 秒');
     h += _pmRow('熔断动作', '全平所有持仓 → 停止网格', true);
   } else if (kind === 'imb') {
-    const th = g('mod-imbalance_threshold_pct') || 20;
+    const th = g('mod-imbalance_threshold_pct') || 80;
+    const rt = g('mod-rebalance_target_pct') || 40;
     const spike = g('mod-oi_spike_pct') || 15;
     const drop = g('mod-oi_drop_pct') || -5;
     h = _pmRow('当前失衡率', imb.toFixed(1) + '%');
-    h += _pmRow('触发阈值', th + '%', true);
-    h += _pmRow(imb >= th ? '⚠️ 已触发' : '距触发还差', imb >= th ? (imb - th).toFixed(1) + '%' : (th - imb).toFixed(1) + '%');
-    h += _pmRow('调平量(净敞口/2)', (Math.abs(net) / 2).toFixed(1) + ' 张', true);
+    h += _pmRow('回补触发', th + '%', true);
+    h += _pmRow(imb >= th ? '⚠️ 已触发回补' : '距触发还差', imb >= th ? (imb - th).toFixed(1) + '%' : (th - imb).toFixed(1) + '%');
+    h += _pmRow('回补目标', rt + '%（须<' + th + '%）');
+    h += _pmRow('回补量(净敞口/2)', (Math.abs(net) / 2).toFixed(1) + ' 张', true);
     h += _pmRow('OI暴增锁≥', spike + '%');
     h += _pmRow('OI下降解锁≤', drop + '%');
   } else if (kind === 'ice') {
@@ -3570,7 +3558,7 @@ function applyPreset(type, el) {
       target_spacing_pct: 0.40, adj_ratio: 0.04,
       imbalance_threshold_pct: 10, oi_spike_pct: 10, oi_drop_pct: -8, oi_lock_base: 7,
       iceberg_sz: 1, pxVar: 1.5,
-      tp_base_pct: 1.5, tp_window_hours: 24, imbalance_blowup_pct: 75, rebalance_target_pct: 8,
+      tp_base_pct: 1.5, tp_window_hours: 24, rebalance_target_pct: 8,
       adjust_split_ratio: 0.40
     },
     standard: {
@@ -3578,7 +3566,7 @@ function applyPreset(type, el) {
       target_spacing_pct: 0.60, adj_ratio: 0.06,
       imbalance_threshold_pct: 20, oi_spike_pct: 15, oi_drop_pct: -5, oi_lock_base: 5,
       iceberg_sz: 2, pxVar: 1.0,
-      tp_base_pct: 1.0, tp_window_hours: 24, imbalance_blowup_pct: 70, rebalance_target_pct: 10,
+      tp_base_pct: 1.0, tp_window_hours: 24, rebalance_target_pct: 10,
       adjust_split_ratio: 0.50
     },
     aggressive: {
@@ -3586,7 +3574,7 @@ function applyPreset(type, el) {
       target_spacing_pct: 0.85, adj_ratio: 0.10,
       imbalance_threshold_pct: 35, oi_spike_pct: 25, oi_drop_pct: -3, oi_lock_base: 3,
       iceberg_sz: 4, pxVar: 0.8,
-      tp_base_pct: 0.8, tp_window_hours: 24, imbalance_blowup_pct: 60, rebalance_target_pct: 12,
+      tp_base_pct: 0.8, tp_window_hours: 24, rebalance_target_pct: 12,
       adjust_split_ratio: 0.60
     }
   };

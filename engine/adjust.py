@@ -111,22 +111,17 @@ def check_adjust(st=None):
     imbalance = calc_imbalance_rate(long_n, short_n)
     st.imbalance_rate = round(imbalance, 2)
 
-    # 风控开关：use_risk_control 控制回补/爆表（止盈/失血/累计回撤/安全距离是独立保险，不受此开关管）
+    # 风控开关：use_risk_control 控制回补（止盈/失血/累计回撤/安全距离是独立保险，不受此开关管）
     if not getattr(st, "use_risk_control", True):
         return
 
-    # ── 三档决策 ──
-    if imbalance >= st.imbalance_blowup_pct:
-        _handle_blowup(st, imbalance)
-    # 失衡回补(B)默认停用(use_rebalance=False)：以A(挂单调价格/单边防堆仓)为主，
-    # 失衡靠盈亏平衡点抬升+挂单保护线外移渐进化解，不主动市价砍仓。
-    # 仅当开关开启时才在失衡>阈值时市价减重仓侧(主动砍仓)。
-    elif imbalance > st.imbalance_threshold_pct:
-        if getattr(st, "use_rebalance", False):
-            _handle_high(st, imbalance)
-    else:
-        if getattr(st, "use_rebalance", False):
-            _handle_low(st, imbalance)
+    # ── 失衡回补（单一触发条件）──
+    # 仅当开关开启、且失衡率 ≥ 回补触发值 时，市价减重仓侧补到目标失衡率。
+    # 失衡率 < 触发值 → 不回补（只靠档位密度缩窄/盈亏平衡点渐进化解，不主动砍仓）。
+    # 触发值/目标值均为 0-100 滑块；目标必须 < 触发（routes 已校验）。
+    trigger = float(getattr(st, "imbalance_threshold_pct", 80.0) or 80.0)
+    if getattr(st, "use_rebalance", False) and imbalance >= trigger:
+        _do_rebalance(st, imbalance)
 
 
 def _do_rebalance(st, imbalance):
@@ -165,28 +160,6 @@ def save_state_lazy(st):
         save_state()
     except Exception:
         pass
-
-
-def _handle_low(st, imbalance):
-    """低/中档(≤20%)：回补盈利侧，保持网格运行。"""
-    _do_rebalance(st, imbalance)
-
-
-def _handle_high(st, imbalance):
-    """高档(>20%且<70%)：按净浮盈回补盈利侧，保持网格运行。"""
-    _do_rebalance(st, imbalance)
-
-
-def _handle_blowup(st, imbalance):
-    """爆表(≥70%)：安全距离兜底 → 市价全平保命。"""
-    from formulas.safety import calc_safety_distance
-    pos = st.position
-    sd = calc_safety_distance(pos.long_contracts, pos.short_contracts,
-                              pos.long_liq_px, pos.short_liq_px, pos.mark_px)
-    _log(st, f"🔴 [爆表] 失衡率={imbalance:.1f}% 安全距离={sd:.1f}% → 紧急全平",
-         level="WARN", cat="RISK",
-         data={"imbalance": imbalance, "safety_distance_pct": round(sd, 2)})
-    _full_flat(st, "失衡爆表", block_rebuild=True)
 
 
 def _check_cumulative_drawdown(st) -> bool:

@@ -226,7 +226,7 @@ def _state_dict(st):
         "oi_full_refresh_interval", "oi_history_size", "oi_sample_count",
         "bleed_window_sec", "equity_history_window_sec", "api_timeout",
         "health_stale_sec", "health_max_failures", "tp_base_pct", "tp_window_hours",
-        "imbalance_threshold_pct", "imbalance_blowup_pct", "rebalance_target_pct",
+        "imbalance_threshold_pct", "rebalance_target_pct",
         "safety_factor", "shrink_pct", "bleed_threshold_pct",
     ):
         d[k] = getattr(st, k, None)
@@ -252,7 +252,7 @@ def _state_dict(st):
         "reserved": round(getattr(st, "reserved_capital", 0.0), 2),
         "grid_available": round(_grid_available(st), 2),
         "leverage": getattr(st, "leverage", 20),
-        "imbalance_threshold": getattr(st, "imbalance_threshold_pct", 20.0),
+        "imbalance_threshold": getattr(st, "imbalance_threshold_pct", 80.0),
         "initial_contracts": getattr(st, "initial_contracts", 0),
         "paused": getattr(st, "paused", False),
         "single_limit": getattr(st, "single_limit", 0),
@@ -1635,12 +1635,13 @@ def register_routes(app: FastAPI):
         calc_recalc = False
         changed = {}   # 记录值真正变化的键 → 旧值（2026-08-13 修复：原用 k in req 恒真）
         for k in ["capital", "reserved_capital", "leverage", "imbalance_threshold",
+                  "imbalance_threshold_pct",
                   "iceberg_sz", "pxVar", "auto_adjust", "grid_auto_run", "use_iceberg",
                   "use_risk_control", "use_bleed_melt", "use_rebalance",
                   "safety_factor", "shrink_pct", "oi_spike_pct", "oi_drop_pct",
                   "oi_lock_base", "bleed_threshold_pct",
                   "price_offset_pct", "adjust_split_ratio", "adj_ratio",
-                  "target_spacing_pct", "imbalance_blowup_pct", "rebalance_target_pct",
+                  "target_spacing_pct", "rebalance_target_pct",
                   "tp_base_pct", "tp_window_hours",
                   "data_loop_interval", "oi_full_refresh_interval", "oi_history_size",
                   "oi_sample_count", "bleed_window_sec", "equity_history_window_sec",
@@ -1672,6 +1673,13 @@ def register_routes(app: FastAPI):
                     if k in ("reserved_capital", "leverage", "safety_factor",
                              "mmr", "zone_warning_ratio", "zone_risk_ratio", "capital"):
                         calc_recalc = True
+        # 回补参数校验（2026-08-14 用户定案）：回补目标必须 < 回补触发，否则拒绝并回滚
+        _trig = float(getattr(st, "imbalance_threshold_pct", 80.0) or 80.0)
+        _tgt = float(getattr(st, "rebalance_target_pct", 40.0) or 40.0)
+        if _trig <= _tgt:
+            _add_log(st, f"⚠ 回补目标({_tgt:.0f}%) 必须 < 触发({_trig:.0f}%)，已拒绝保存",
+                     level="ERROR", cat="PARAM")
+            return {"status": "error", "msg": f"回补目标({_tgt:.0f}%) 必须 < 回补触发({_trig:.0f}%)"}
         if calc_recalc:
             _recalc_formula_details(st)
         # 改动6：参数变更 → 是否撤单重挂（2026-08-13 按用户规则重构）

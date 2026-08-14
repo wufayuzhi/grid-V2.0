@@ -85,9 +85,8 @@ class GridState:
     tp_base_pct: float = 1.0       # 止盈线基础%（24h）
     tp_window_hours: float = 24.0  # 止盈时间档（每档递增）
     # 失衡率
-    imbalance_threshold_pct: float = 20.0   # 失衡紧张阈值
-    imbalance_blowup_pct: float = 70.0      # 失衡爆表阈值
-    rebalance_target_pct: float = 10.0      # 回补目标失衡率
+    imbalance_threshold_pct: float = 80.0   # 回补触发失衡率（0-100，默认80）
+    rebalance_target_pct: float = 40.0      # 回补目标失衡率（0-100，默认40，须<触发）
     # 风控
     safety_factor: float = 0.7
     shrink_pct: float = 10.0
@@ -292,7 +291,6 @@ class GridState:
                 "bleed_threshold_pct": self.bleed_threshold_pct,
                 "tp_base_pct": self.tp_base_pct,
                 "tp_window_hours": self.tp_window_hours,
-                "imbalance_blowup_pct": self.imbalance_blowup_pct,
                 "rebalance_target_pct": self.rebalance_target_pct,
                 "price_offset_pct": self.price_offset_pct,
                 "adjust_split_ratio": self.adjust_split_ratio,

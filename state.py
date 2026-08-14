@@ -77,7 +77,6 @@ def save_state():
         "tp_base_pct": st.tp_base_pct,
         "tp_window_hours": st.tp_window_hours,
         "imbalance_threshold_pct": st.imbalance_threshold_pct,
-        "imbalance_blowup_pct": st.imbalance_blowup_pct,
         "rebalance_target_pct": st.rebalance_target_pct,
         "safety_factor": st.safety_factor,
         "shrink_pct": st.shrink_pct,
@@ -213,9 +212,8 @@ def load_state() -> GridState:
         st.pending_iceberg = data.get("pending_iceberg", 0)
         st.tp_base_pct = data.get("tp_base_pct", 1.0)
         st.tp_window_hours = data.get("tp_window_hours", 24.0)
-        st.imbalance_threshold_pct = data.get("imbalance_threshold_pct", 20.0)
-        st.imbalance_blowup_pct = data.get("imbalance_blowup_pct", 70.0)
-        st.rebalance_target_pct = data.get("rebalance_target_pct", 10.0)
+        st.imbalance_threshold_pct = data.get("imbalance_threshold_pct", 80.0)
+        st.rebalance_target_pct = data.get("rebalance_target_pct", 40.0)
         st.safety_factor = data.get("safety_factor", 0.7)
         st.shrink_pct = data.get("shrink_pct", 10.0)
         st.bleed_threshold_pct = data.get("bleed_threshold_pct", 3.0)
