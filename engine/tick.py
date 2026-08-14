@@ -47,10 +47,8 @@ async def data_loop():
     try:
         from engine.grid import backfill_grid_stats
         st0 = get_state()
-        # 若 state 里残留了统计但当前账户无成交(grid_count>0 而交易所为空)，
-        # 先清零触发 backfill 从实盘订单历史权威重算(幂等安全，实盘无成交→0)
-        if (st0.grid_count or 0) > 0:
-            _clear_residual_stats(st0)
+        # backfill 自身幂等：grid_count>0 时跳过重算，保留已有统计，避免每次启动
+        # 被 OKX 限流(429)漏数覆盖为错误值。切模式/建仓已在 routes.py 清零后触发重算。
         backfill_grid_stats(st0)
     except Exception as e:
         logger.warning(f"启动回填网格统计失败: {e}")
