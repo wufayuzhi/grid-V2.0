@@ -129,6 +129,12 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto Sans
 .sw-opt{margin-left:auto;cursor:pointer;font-size:11px;opacity:.7;padding:0 2px}
 .sw-opt:hover{opacity:1}
 .sw-param{font-size:10px;color:var(--t3);margin-top:3px;padding-left:12px}
+.sw-param .sw-set{margin-left:auto;float:right;font-size:10px;padding:1px 8px;border-radius:4px;border:1px solid var(--bd);background:var(--card2);cursor:pointer;color:var(--purple)}
+.sw-param .sw-set:hover{border-color:var(--purple);background:#F6F3FF}
+.sw-top .sw-tgl{width:34px;height:19px;background:var(--t3);border-radius:10px;position:relative;cursor:pointer;transition:all .25s;flex-shrink:0;margin-left:auto}
+.sw-top .sw-tgl .sw-tgl-knob{content:'';position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:all .25s}
+.sw-top .sw-tgl.on{background:var(--purple)}
+.sw-top .sw-tgl.on .sw-tgl-knob{left:17px}
 .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;background:var(--t3)}
 .dot.blue{background:#2196F3}
 .dot.green{background:#10B981}
@@ -855,21 +861,21 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
     </div>
     <!-- 状态灯开关 2×2：点按钮=切开关(启/停)，点 ⚙️=弹参数窗 -->
     <div class="sw-grid">
-      <div class="sw-btn" onclick="dblTapOpen(function(){toggleParam('use_rebalance')},this)">
-        <div class="sw-top"><span class="dot" id="sw-adj-dot"></span><b>失衡监控</b><span class="sw-opt" onclick="event.stopPropagation();openParamModal('imb')" title="参数">⚙️</span></div>
-        <div class="sw-param">失衡阈值 <b id="sw-adj-val">—</b>%</div>
+      <div class="sw-btn">
+        <div class="sw-top"><span class="dot" id="sw-adj-dot"></span><b>失衡监控</b><span class="sw-tgl" id="sw-adj-tgl" onclick="toggleParam('use_rebalance')"><span class="sw-tgl-knob"></span></span></div>
+        <div class="sw-param">失衡阈值 <b id="sw-adj-val">—</b>% <button class="sw-set" onclick="openParamModal('imb')">设置</button></div>
       </div>
-      <div class="sw-btn" onclick="dblTapOpen(function(){toggleParam('use_iceberg')},this)">
-        <div class="sw-top"><span class="dot" id="sw-ice-dot"></span><b>冰山委托</b><span class="sw-opt" onclick="event.stopPropagation();openParamModal('ice')" title="参数">⚙️</span></div>
-        <div class="sw-param">单笔 <b id="sw-ice-val">—</b> 张</div>
+      <div class="sw-btn">
+        <div class="sw-top"><span class="dot" id="sw-ice-dot"></span><b>冰山委托</b><span class="sw-tgl" id="sw-ice-tgl" onclick="toggleParam('use_iceberg')"><span class="sw-tgl-knob"></span></span></div>
+        <div class="sw-param">单笔 <b id="sw-ice-val">—</b> 张 <button class="sw-set" onclick="openParamModal('ice')">设置</button></div>
       </div>
-      <div class="sw-btn" onclick="dblTapOpen(function(){toggleParam('use_risk_control')},this)">
-        <div class="sw-top"><span class="dot" id="sw-risk-dot"></span><b>风控启用</b><span class="sw-opt" onclick="event.stopPropagation();openParamModal('risk')" title="参数">⚙️</span></div>
-        <div class="sw-param">安全系数 <b id="sw-risk-val">—</b></div>
+      <div class="sw-btn">
+        <div class="sw-top"><span class="dot" id="sw-risk-dot"></span><b>风控启用</b><span class="sw-tgl" id="sw-risk-tgl" onclick="toggleParam('use_risk_control')"><span class="sw-tgl-knob"></span></span></div>
+        <div class="sw-param">安全系数 <b id="sw-risk-val">—</b> <button class="sw-set" onclick="openParamModal('risk')">设置</button></div>
       </div>
-      <div class="sw-btn" onclick="dblTapOpen(function(){toggleParam('use_bleed_melt')},this)">
-        <div class="sw-top"><span class="dot" id="sw-bleed-dot"></span><b>失血熔断</b><span class="sw-opt" onclick="event.stopPropagation();openParamModal('bleed')" title="参数">⚙️</span></div>
-        <div class="sw-param">失血阈值 <b id="sw-bleed-val">—</b>%</div>
+      <div class="sw-btn">
+        <div class="sw-top"><span class="dot" id="sw-bleed-dot"></span><b>失血熔断</b><span class="sw-tgl" id="sw-bleed-tgl" onclick="toggleParam('use_bleed_melt')"><span class="sw-tgl-knob"></span></span></div>
+        <div class="sw-param">失血阈值 <b id="sw-bleed-val">—</b>% <button class="sw-set" onclick="openParamModal('bleed')">设置</button></div>
       </div>
     </div>
     <!-- 快速预设 -->
@@ -3108,6 +3114,8 @@ function updateStatusLights(p, S) {
   setDot('sw-adj-dot', !running || !adjEnabled ? 'blue' : (imRate >= imThresh ? 'yellow' : 'green'));
   const adj = document.getElementById('sw-adj-val');
   if (adj) adj.textContent = imThresh;
+  const adjTgl = document.getElementById('sw-adj-tgl');
+  if (adjTgl) adjTgl.classList.toggle('on', adjEnabled);
 
   // 网格自动运行：开关=grid_auto_run；蓝=未运行/开关关，绿=运行，紧急拆墙→黄
   const gRun = p.grid_auto_run !== false;
@@ -3121,6 +3129,8 @@ function updateStatusLights(p, S) {
   setDot('sw-ice-dot', !running || !iceEnabled ? 'blue' : (S.pending_iceberg ? 'yellow' : 'green'));
   const ice = document.getElementById('sw-ice-val');
   if (ice) ice.textContent = p.iceberg_sz ?? '—';
+  const iceTgl = document.getElementById('sw-ice-tgl');
+  if (iceTgl) iceTgl.classList.toggle('on', iceEnabled);
 
   // 风控启用：蓝=未运行，绿=运行，累计回撤≥阈值 或 安全距离触发→红
   const flat = (S.flat_reason || '').toString();
@@ -3130,6 +3140,8 @@ function updateStatusLights(p, S) {
   setDot('sw-risk-dot', !running || !riskEnabled ? 'blue' : (drawdownTrig || safetyTrig ? 'red' : 'green'));
   const risk = document.getElementById('sw-risk-val');
   if (risk) risk.textContent = p.safety_factor ?? '—';
+  const riskTgl = document.getElementById('sw-risk-tgl');
+  if (riskTgl) riskTgl.classList.toggle('on', riskEnabled);
 
   // 失血熔断：蓝=未运行，绿=运行，失血熔断触发→红
   const bleedTrig = /失血/.test(flat);
@@ -3137,6 +3149,8 @@ function updateStatusLights(p, S) {
   setDot('sw-bleed-dot', !running || !bleedEnabled ? 'blue' : (bleedTrig ? 'red' : 'green'));
   const bleed = document.getElementById('sw-bleed-val');
   if (bleed) bleed.textContent = p.bleed_threshold_pct ?? '—';
+  const bleedTgl = document.getElementById('sw-bleed-tgl');
+  if (bleedTgl) bleedTgl.classList.toggle('on', bleedEnabled);
 
   // 网格调仓：蓝=未运行，绿=运行且挂单真实存在，防抖紧急拆墙→黄，网格异常→红
   const gridUp = (S.grid_upper_px || 0) > 0;
