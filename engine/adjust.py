@@ -120,12 +120,17 @@ def check_adjust(st=None):
     # 失衡率 < 触发值 → 不回补（只靠档位密度缩窄/盈亏平衡点渐进化解，不主动砍仓）。
     # 触发值/目标值均为 0-100 滑块；目标必须 < 触发（routes 已校验）。
     trigger = float(getattr(st, "imbalance_threshold_pct", 80.0) or 80.0)
+    target = float(getattr(st, "rebalance_target_pct", 40.0) or 40.0)
     if getattr(st, "use_rebalance", False) and imbalance >= trigger:
-        _do_rebalance(st, imbalance)
+        _do_rebalance(st, imbalance, target, _start_new_round=True)
+    # 失衡已回到目标以下 → 本轮回补完成（下次失衡再超触发时计为新的一轮）
+    elif getattr(st, "use_rebalance", False) and imbalance <= target:
+        st.rebalance_complete = True
 
 
-def _do_rebalance(st, imbalance):
-    """回补盈利侧：市价减重仓侧 rebalance_contracts 张。带冷却防每tick重复下单。"""
+def _do_rebalance(st, imbalance, target, _start_new_round=False):
+    """回补盈利侧：市价减重仓侧 rebalance_contracts 张。带冷却防每tick重复下单。
+    按回补周期计数：一轮回补(失衡≥触发→回到目标)只算1次，连续减仓多笔不重复计。"""
     pos = st.position
     # 冷却：距上次回补不足 N 秒则跳过（防高失衡下每2s连发）
     now = time.time()
@@ -149,7 +154,10 @@ def _do_rebalance(st, imbalance):
     r = reduce_position(side, contracts)
     if r.get("status") == "ok":
         st.last_rebalance_ts = now
-        st.rebalance_cnt = (getattr(st, "rebalance_cnt", 0) or 0) + 1  # 失衡回补次数独立计数
+        # 一轮回补开始才计1次（上次已完成回补，本次是新的一轮）
+        if getattr(st, "rebalance_complete", True) is True:
+            st.rebalance_cnt = (getattr(st, "rebalance_cnt", 0) or 0) + 1
+            st.rebalance_complete = False
         _log(st, f"🔄 [回补] 失衡率={imbalance:.1f}% 减{side} {contracts}张→目标{st.rebalance_target_pct:.0f}% (第{st.rebalance_cnt}次)",
              cat="REBAL", data={"imbalance": imbalance, "side": side, "contracts": contracts})
         save_state_lazy(st)
