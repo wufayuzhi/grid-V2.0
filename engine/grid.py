@@ -112,8 +112,10 @@ def _notify_trade(st, desc, side):
 
 
 def _fetch_all_order_history(client, inst_id):
-    """拉全订单历史(orders-history + archive，分页，before 拉更早)。"""
+    """拉全订单历史(orders-history + archive，分页，before 拉更早)。
+    两接口数据重叠，按 ordId 去重，避免同一订单重复计数。"""
     orders = []
+    seen_ord = set()
     for ep in ("/api/v5/trade/orders-history", "/api/v5/trade/orders-history-archive"):
         before_ts = ""
         guard = 0
@@ -130,7 +132,11 @@ def _fetch_all_order_history(client, inst_id):
             items = r.get("data", []) if isinstance(r, dict) else r
             if not items:
                 break
-            orders.extend(items)
+            for o in items:
+                oid = o.get("ordId")
+                if oid and oid not in seen_ord:
+                    seen_ord.add(oid)
+                    orders.append(o)
             before_ts = items[-1]["cTime"]
     return orders
 
@@ -225,13 +231,17 @@ def backfill_grid_stats(st) -> None:
             if not ts or int(ts) <= int(start_ts):
                 continue
             side = o.get("side"); pos = o.get("posSide")
-            # 网格滚动：开空(short+sell) 或 开多(long+buy) 各计半轮；以开空为准(每轮恰好1个)
+            # 网格滚动：开空(short+sell) = 上端成交。失衡回补(short buy)不产生开空 → 不计。
+            # 每次滚动恰好1个开空；建仓产生1个开空(最后统一 -1 排除建仓)。
             if pos == "short" and side == "sell":
                 k = (ts, o.get("ordId"), o.get("sz"))
                 if k not in seen_open:
                     seen_open.add(k)
                     roll_cnt += 1
-        # 已实现收益 + 手续费仍从账单(subType 5/6=平多/平空)权威统计
+        # 排除建仓那笔开空(网格滚动起点的大额成对开空+开多) → 滚动次数 = 开空订单数 - 1
+        if roll_cnt > 0:
+            roll_cnt -= 1
+        # 已实现收益 + 手续费仍从账单(subType 5/6=平多/平空)权威统计（不计入滚动次数，避免双重计数）
         seen = set()
         for b in bills:
             ts = b.get("ts", "")
@@ -239,10 +249,6 @@ def backfill_grid_stats(st) -> None:
                 continue
             st_ = int(b.get("subType") or 0)
             if st_ in (5, 6):
-                k = (b.get("ts"), b.get("ordId"), b.get("sz"))
-                if k not in seen:
-                    seen.add(k)
-                    roll_cnt += 1
                 pnl_total += float(b.get("pnl") or 0)
             if st_ in (1, 2, 3, 4, 5, 6):
                 fee_total += float(b.get("fee") or 0)  # fee 为负(支出)
