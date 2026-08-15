@@ -833,7 +833,7 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
   <div class="met-cell"><div class="ml">总权益</div><div class="mv" id="m-eq">—</div></div>
   <div class="met-cell"><div class="ml">净敞口</div><div class="mv" id="m-net">—</div></div>
   <div class="met-cell"><div class="ml">失衡率</div><div class="mv" id="m-ir" style="display:flex;align-items:center;justify-content:center;gap:6px"><span id="m-ir-val">—</span><button id="imb-dot" onclick="dblTapOpen(function(){openParamModal('imb')},this)" title="失衡监控参数" style="width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.15);cursor:pointer;padding:0;flex-shrink:0;background:#10B981"></button></div></div>
-  <div class="met-cell"><div class="ml">安全距离</div><div class="mv" id="m-sd">—</div></div>
+  <div class="met-cell"><div class="ml">安全距离</div><div class="mv" id="m-sd">—</div><div class="mn-sub" id="m-sd-danger" style="font-size:10px;opacity:.65;font-weight:normal;margin-top:2px">—</div></div>
   <div class="met-cell"><div class="ml">liqPx</div><div class="mv" id="m-liq">—</div></div>
   <div class="met-cell"><div class="ml">网格</div><div class="mv" id="m-gc">0</div><div class="mn-sub" id="m-gc-sub" style="font-size:10px;opacity:.65;font-weight:normal;margin-top:2px">—</div></div>
   <div class="met-cell"><div class="ml">净收益</div><div class="mv" id="m-pnl">0.00</div><div class="mn-sub" id="m-pnl-sub" style="font-size:10px;opacity:.65;font-weight:normal;margin-top:2px">—</div></div>
@@ -2138,6 +2138,28 @@ async function refresh() {
       }
       document.getElementById('m-sd').innerHTML =
         cellsHtml + ' <span style="vertical-align:middle;color:' + ccol + ';font-weight:600">' + sdV.toFixed(1) + '%</span>';
+    }
+    // ── 安全距离"只显示危险侧 + 反推触发价"（2026-08-15 批次5）──
+    // 危险方向 = 净敞口方向（多>空→净多→危险是跌；空>多→净空→危险是涨）
+    // 触发价 = 让安全距离缩到阈值(0%)的价格（即强平价），显示"现价需到多少才全平"
+    {
+      const L = S.long?.contracts || 0, Sh = S.short?.contracts || 0;
+      const mark = S.mark_px || 0;
+      const net = L - Sh;
+      let danger = '—';
+      if (net > 0) {
+        const liq = S.long?.liq_px || 0;
+        if (liq > 0) danger = `空头安全（净多）· 价格需【跌】到 ${liq} 才全平`;
+        else danger = '完全对冲或空头无敌';
+      } else if (net < 0) {
+        const liq = S.short?.liq_px || 0;
+        if (liq > 0) danger = `多头安全（净空）· 价格需【涨】到 ${liq} 才全平`;
+        else danger = '完全对冲或空头无敌';
+      } else {
+        danger = '完全对冲（多空等量）· 无危险侧';
+      }
+      const mDanger = document.getElementById('m-sd-danger');
+      if (mDanger) mDanger.textContent = danger;
     }
     // liqPx 来源：使用 position 中的强平价格
     const longLiq = S.long?.liq_px || 0;
