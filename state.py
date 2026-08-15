@@ -91,7 +91,8 @@ def save_state():
         "mode": st.mode,
         "one_way_threshold": st.one_way_threshold,
         "ladder_rates": st.ladder_rates,
-        "ladder_densities": st.ladder_densities,
+        "ladder_gap_up": st.ladder_gap_up,
+        "ladder_gap_dn": st.ladder_gap_dn,
         "ladder_enabled": st.ladder_enabled,
         "confirm_time": st.confirm_time,
         "exit_buffer": st.exit_buffer,
@@ -230,7 +231,20 @@ def load_state() -> GridState:
         st.mode = data.get("mode", "attack")
         st.one_way_threshold = data.get("one_way_threshold", 60.0)
         st.ladder_rates = data.get("ladder_rates", [40, 50, 60, 70, 80])
-        st.ladder_densities = data.get("ladder_densities", [1.4, 1.0, 0.75, 0.5, 0.3])
+        # 兼容旧仓：读新字段 gap_up/gap_dn；旧仓仅有 ladder_densities → 从旧密度换算初始价差
+        _old_dens = data.get("ladder_densities")
+        if data.get("ladder_gap_up") is not None:
+            st.ladder_gap_up = data.get("ladder_gap_up")
+        elif _old_dens is not None:
+            st.ladder_gap_up = [max(round(d * 2.0, 2), 0.3) for d in _old_dens]
+        else:
+            st.ladder_gap_up = [2.0, 1.5, 1.2, 1.0, 0.8]
+        if data.get("ladder_gap_dn") is not None:
+            st.ladder_gap_dn = data.get("ladder_gap_dn")
+        elif _old_dens is not None:
+            st.ladder_gap_dn = [max(round(d * 1.0, 2), 0.3) for d in _old_dens]
+        else:
+            st.ladder_gap_dn = [1.0, 0.8, 0.7, 0.5, 0.4]
         # 兼容旧仓(无 ladder_enabled)：默认全启用
         st.ladder_enabled = data.get("ladder_enabled", [True, True, True, True, True])
         st.confirm_time = data.get("confirm_time", 30.0)

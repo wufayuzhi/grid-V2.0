@@ -1135,21 +1135,21 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
           <input type="range" class="mod-slider" id="mod-one_way_threshold" min="30" max="90" step="1" value="60" oninput="onModChange('one_way_threshold',this)">
           <div class="pm-note">失衡 ≥ 此% 时只平重仓侧（单向成交+紧急拆墙唯一开关）</div>
           <div class="pm-div"></div>
-          <div class="pm-sub">档位表（紧急格专用缩窄密度，文档§2.3/2.5）<span style="font-weight:400;color:var(--t3)">☑勾选=启用该档，密度可下拉可选/可手输</span></div>
+          <div class="pm-sub">档位表（收网手填价差，2026-08-15重构）<span style="font-weight:400;color:var(--t3)">☑勾选=启用该档；上端价差=累加重仓侧挂远，下端价差=化解重仓侧挂近，强制≥0.3%</span></div>
           <datalist id="ladder-dens-list">
             <option value="0.3"></option><option value="0.5"></option><option value="0.75"></option>
             <option value="1.0"></option><option value="1.4"></option><option value="2.0"></option>
             <option value="2.5"></option><option value="3.0"></option>
           </datalist>
-          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en1" onchange="toggleLadderEnabled(0,this)" style="width:auto"><span>档1失衡率%</span><span class="sl-val" id="sl-lr1">40</span><span style="margin-left:8px">密度</span><input list="ladder-dens-list" id="mod-ld1" onchange="onLadderChange(0,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
+          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en1" onchange="toggleLadderEnabled(0,this)" style="width:auto"><span>档1失衡率%</span><span class="sl-val" id="sl-lr1">40</span><span style="margin-left:8px">上端%</span><input id="mod-lgu1" onchange="onLadderGapUp(0,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"><span style="margin-left:8px">下端%</span><input id="mod-ldn1" onchange="onLadderGapDn(0,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
           <input type="range" class="mod-slider" id="mod-lr1" min="0" max="100" step="1" value="40" oninput="onLadderRateChange(0,this)">
-          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en2" onchange="toggleLadderEnabled(1,this)" style="width:auto"><span>档2失衡率%</span><span class="sl-val" id="sl-lr2">50</span><span style="margin-left:8px">密度</span><input list="ladder-dens-list" id="mod-ld2" onchange="onLadderChange(1,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
+          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en2" onchange="toggleLadderEnabled(1,this)" style="width:auto"><span>档2失衡率%</span><span class="sl-val" id="sl-lr2">50</span><span style="margin-left:8px">上端%</span><input id="mod-lgu2" onchange="onLadderGapUp(1,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"><span style="margin-left:8px">下端%</span><input id="mod-ldn2" onchange="onLadderGapDn(1,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
           <input type="range" class="mod-slider" id="mod-lr2" min="0" max="100" step="1" value="50" oninput="onLadderRateChange(1,this)">
-          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en3" onchange="toggleLadderEnabled(2,this)" style="width:auto"><span>档3失衡率%</span><span class="sl-val" id="sl-lr3">60</span><span style="margin-left:8px">密度</span><input list="ladder-dens-list" id="mod-ld3" onchange="onLadderChange(2,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
+          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en3" onchange="toggleLadderEnabled(2,this)" style="width:auto"><span>档3失衡率%</span><span class="sl-val" id="sl-lr3">60</span><span style="margin-left:8px">上端%</span><input id="mod-lgu3" onchange="onLadderGapUp(2,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"><span style="margin-left:8px">下端%</span><input id="mod-ldn3" onchange="onLadderGapDn(2,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
           <input type="range" class="mod-slider" id="mod-lr3" min="0" max="100" step="1" value="60" oninput="onLadderRateChange(2,this)">
-          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en4" onchange="toggleLadderEnabled(3,this)" style="width:auto"><span>档4失衡率%</span><span class="sl-val" id="sl-lr4">70</span><span style="margin-left:8px">密度</span><input list="ladder-dens-list" id="mod-ld4" onchange="onLadderChange(3,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
+          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en4" onchange="toggleLadderEnabled(3,this)" style="width:auto"><span>档4失衡率%</span><span class="sl-val" id="sl-lr4">70</span><span style="margin-left:8px">上端%</span><input id="mod-lgu4" onchange="onLadderGapUp(3,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"><span style="margin-left:8px">下端%</span><input id="mod-ldn4" onchange="onLadderGapDn(3,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
           <input type="range" class="mod-slider" id="mod-lr4" min="0" max="100" step="1" value="70" oninput="onLadderRateChange(3,this)">
-          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en5" onchange="toggleLadderEnabled(4,this)" style="width:auto"><span>档5失衡率%</span><span class="sl-val" id="sl-lr5">80</span><span style="margin-left:8px">密度</span><input list="ladder-dens-list" id="mod-ld5" onchange="onLadderChange(4,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
+          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en5" onchange="toggleLadderEnabled(4,this)" style="width:auto"><span>档5失衡率%</span><span class="sl-val" id="sl-lr5">80</span><span style="margin-left:8px">上端%</span><input id="mod-lgu5" onchange="onLadderGapUp(4,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"><span style="margin-left:8px">下端%</span><input id="mod-ldn5" onchange="onLadderGapDn(4,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
           <input type="range" class="mod-slider" id="mod-lr5" min="0" max="100" step="1" value="80" oninput="onLadderRateChange(4,this)">
           <div class="sl-row"><span>确认时间T(s)</span><span class="sl-val" id="sl-confirm_time">30</span></div>
           <input type="range" class="mod-slider" id="mod-confirm_time" min="10" max="120" step="1" value="30" oninput="onModChange('confirm_time',this)">
@@ -3101,7 +3101,7 @@ function toggleParam(k) {
   apiPost(API_BASE + '/api/v1/config/params', { [k]: newVal }).then(refresh).catch(e => console.log('toggleParam:', e));
 }
 
-// ── 档位表（ladder_rates / ladder_densities）──
+// ── 档位表（ladder_rates / ladder_gap_up / ladder_gap_dn）──
 // 档位失衡率滑块（0-indexed: 0=档1..4=档5）→ 更新 ladder_rates 数组
 function onLadderRateChange(idx, el) {
   const rates = (S.params.ladder_rates || [40, 50, 60, 70, 80]).slice();
@@ -3110,12 +3110,19 @@ function onLadderRateChange(idx, el) {
   if (lbl) lbl.textContent = el.value;
   _pendingChanges.ladder_rates = rates;
 }
-// 档位密度输入（下拉可选/可手输）→ 更新 ladder_densities 数组
-function onLadderChange(idx, el) {
-  const dens = (S.params.ladder_densities || [1.4, 1.0, 0.75, 0.5, 0.3]).slice();
+// 档位上端价差输入（累加重仓侧挂远）→ 更新 ladder_gap_up 数组
+function onLadderGapUp(idx, el) {
+  const gup = (S.params.ladder_gap_up || [2.0, 1.5, 1.2, 1.0, 0.8]).slice();
   const v = parseFloat(el.value);
-  if (!isNaN(v) && v > 0) dens[idx] = v;
-  _pendingChanges.ladder_densities = dens;
+  if (!isNaN(v) && v >= 0) gup[idx] = v;
+  _pendingChanges.ladder_gap_up = gup;
+}
+// 档位下端价差输入（化解重仓侧挂近）→ 更新 ladder_gap_dn 数组
+function onLadderGapDn(idx, el) {
+  const gdn = (S.params.ladder_gap_dn || [1.0, 0.8, 0.7, 0.5, 0.4]).slice();
+  const v = parseFloat(el.value);
+  if (!isNaN(v) && v >= 0) gdn[idx] = v;
+  _pendingChanges.ladder_gap_dn = gdn;
 }
 // 档位勾选启用（☑）→ 更新 ladder_enabled 数组
 function toggleLadderEnabled(idx, el) {
@@ -3389,18 +3396,21 @@ function switchCalcTab(kind) {
   });
   updatePMFormula(kind);
   updatePMResult(kind);
-  // 同步失衡档位表（ladder_rates 滑块 + ladder_densities 输入 + ladder_enabled 勾选）
+  // 同步失衡档位表（ladder_rates 滑块 + ladder_gap_up/ldn 上下端价差 + ladder_enabled 勾选）
   if (kind === 'imb') {
     const rates = (p.ladder_rates || [40, 50, 60, 70, 80]).slice();
-    const dens = (p.ladder_densities || [1.4, 1.0, 0.75, 0.5, 0.3]).slice();
+    const gup = (p.ladder_gap_up || [2.0, 1.5, 1.2, 1.0, 0.8]).slice();
+    const gdn = (p.ladder_gap_dn || [1.0, 0.8, 0.7, 0.5, 0.4]).slice();
     const en = (p.ladder_enabled || [true, true, true, true, true]).slice();
     for (let i = 0; i < 5; i++) {
       const rateSl = document.getElementById('mod-lr' + (i + 1));
       const rateLb = document.getElementById('sl-lr' + (i + 1));
       if (rateSl) { rateSl.value = rates[i] !== undefined ? rates[i] : rateSl.value; }
       if (rateLb) { rateLb.textContent = rates[i] !== undefined ? rates[i] : rateLb.textContent; }
-      const denSl = document.getElementById('mod-ld' + (i + 1));
-      if (denSl) { denSl.value = String(dens[i] !== undefined ? dens[i] : denSl.value); }
+      const gupSl = document.getElementById('mod-lgu' + (i + 1));
+      if (gupSl) { gupSl.value = String(gup[i] !== undefined ? gup[i] : gupSl.value); }
+      const gdnSl = document.getElementById('mod-ldn' + (i + 1));
+      if (gdnSl) { gdnSl.value = String(gdn[i] !== undefined ? gdn[i] : gdnSl.value); }
       const enSl = document.getElementById('mod-lr-en' + (i + 1));
       if (enSl) { enSl.checked = en[i] !== undefined ? !!en[i] : true; }
     }
@@ -3575,7 +3585,7 @@ async function saveAllParams() {
   // ③ 风控/冰山/失血/其它 → 不触发重挂，不需确认
   const gridKeys = ['adj_ratio','base_density','defense_density','density_min',
                     'atr_timeframe','atr_period'];
-  const ladderKeys = ['one_way_threshold','ladder_rates','ladder_densities'];
+  const ladderKeys = ['one_way_threshold','ladder_rates','ladder_gap_up','ladder_gap_dn'];
   const touchedGrid = gridKeys.some(k => params[k] !== undefined && (k in _pendingChanges));
   const curImb = (S && S.imbalance_rate !== undefined ? S.imbalance_rate : 0);
   // 档位类：只要当前失衡率达到任一档（或达到单向阈值）才算会触发重挂
@@ -3772,7 +3782,8 @@ setInterval(() => { if (S.inst_id) loadChartData(S.cur_tf || '15m', false, true)
   window.onSafetyChange = onSafetyChange;
   window.onInitChange = onInitChange;
   window.onLadderRateChange = onLadderRateChange;
-  window.onLadderChange = onLadderChange;
+  window.onLadderGapUp = onLadderGapUp;
+  window.onLadderGapDn = onLadderGapDn;
   window.toggleLadderEnabled = toggleLadderEnabled;
   window.toggleTimeMode = toggleTimeMode;
   window._chartUTCMode = false;  // 默认本地时间

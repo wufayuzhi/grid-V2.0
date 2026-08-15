@@ -123,7 +123,8 @@ class GridState:
     mode: str = "attack"               # attack进攻 / defense防守（人工切）
     one_way_threshold: float = 60.0    # 单向成交阈值(%)
     ladder_rates: list = field(default_factory=lambda: [40, 50, 60, 70, 80])   # 档位失衡率
-    ladder_densities: list = field(default_factory=lambda: [1.4, 1.0, 0.75, 0.5, 0.3])  # 档位密度
+    ladder_gap_up: list = field(default_factory=lambda: [2.0, 1.5, 1.2, 1.0, 0.8])  # 档位上端手填价差%(累加重仓侧挂远)
+    ladder_gap_dn: list = field(default_factory=lambda: [1.0, 0.8, 0.7, 0.5, 0.4])  # 档位下端手填价差%(化解重仓侧挂近)
     ladder_enabled: list = field(default_factory=lambda: [True, True, True, True, True])  # 档位是否启用(勾选)
     # bePx 防抖/紧急迟滞
     confirm_time: float = 30.0         # 确认时间 T(秒)
@@ -321,7 +322,8 @@ class GridState:
                 "mode": self.mode,
                 "one_way_threshold": self.one_way_threshold,
                 "ladder_rates": list(self.ladder_rates),
-                "ladder_densities": list(self.ladder_densities),
+                "ladder_gap_up": list(self.ladder_gap_up),
+                "ladder_gap_dn": list(self.ladder_gap_dn),
                 "ladder_enabled": list(self.ladder_enabled),
                 "confirm_time": self.confirm_time,
                 "exit_buffer": self.exit_buffer,

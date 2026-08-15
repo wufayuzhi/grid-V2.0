@@ -296,7 +296,8 @@ def _state_dict(st):
         "current_density": round(float(getattr(st, "current_density", 0.0) or 0.0), 3),
         "grid_anchor_px": round(float(getattr(st, "grid_anchor_px", 0.0) or 0.0), 8),
         "ladder_rates": list(getattr(st, "ladder_rates", [40, 50, 60, 70, 80])),
-        "ladder_densities": list(getattr(st, "ladder_densities", [1.4, 1.0, 0.75, 0.5, 0.3])),
+        "ladder_gap_up": list(getattr(st, "ladder_gap_up", [2.0, 1.5, 1.2, 1.0, 0.8])),
+        "ladder_gap_dn": list(getattr(st, "ladder_gap_dn", [1.0, 0.8, 0.7, 0.5, 0.4])),
         "ladder_enabled": list(getattr(st, "ladder_enabled", [True, True, True, True, True])),
     }
     d["adjust_history"] = getattr(st, "adjust_history", [])[-20:]
@@ -1684,7 +1685,7 @@ def register_routes(app: FastAPI):
                   "oi_sample_count", "bleed_window_sec", "equity_history_window_sec",
                   "api_timeout", "health_stale_sec", "health_max_failures",
                   "use_dynamic_params", "base_density", "defense_density", "mode",
-                  "one_way_threshold", "ladder_rates", "ladder_densities", "ladder_enabled",
+                  "one_way_threshold", "ladder_rates", "ladder_gap_up", "ladder_gap_dn", "ladder_enabled",
                   "confirm_time", "exit_buffer", "debounce_loss_line",
                   "debounce_profit_line", "atr_timeframe", "atr_period", "density_min",
                   "cumulative_drawdown_threshold", "safety_flat_threshold",
@@ -1728,7 +1729,7 @@ def register_routes(app: FastAPI):
         #   ③ 风控/冰山/失血/其它 → 永不重挂（不影响挂单价）
         grid_direct = {"adj_ratio", "base_density", "defense_density", "density_min",
                        "atr_timeframe", "atr_period"}
-        ladder_keys = {"ladder_rates", "ladder_densities", "one_way_threshold"}
+        ladder_keys = {"ladder_rates", "ladder_gap_up", "ladder_gap_dn", "one_way_threshold"}
 
         rehang = False
         if changed.keys() & grid_direct:

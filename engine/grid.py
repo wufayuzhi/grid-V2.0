@@ -268,23 +268,36 @@ def _mode_base_density(st) -> float:
     return float(getattr(st, "base_density", 2.0) or 2.0)
 
 
-def _ladder_density(st, imbalance) -> float:
-    """档位表密度：取失衡率对应档（≥该档取该档密度），未达档位取 base。文档§2.3。
+def _ladder_gap(st, imbalance) -> tuple:
+    """档位手填价差（上端, 下端）：取失衡率对应档（≥该档取该档价差），未达档位取 None。
 
-    2026-08-13：新增档位勾选（ladder_enabled）——未勾选的档跳过不参与判定。
-    遍历时只考虑"启用且失衡率达到"的档，取最高的那一档密度。
+    2026-08-15 重构：原 ladder_densities(密度) 删掉，改为手填价差 gap_up/gap_dn。
+    返回 (up_gap, dn_gap)，两者为百分比；未达任一档位返回 (None, None)。
     """
     rates = list(getattr(st, "ladder_rates", [40, 50, 60, 70, 80]) or [40, 50, 60, 70, 80])
-    dens = list(getattr(st, "ladder_densities", [1.4, 1.0, 0.75, 0.5, 0.3]) or [1.4, 1.0, 0.75, 0.5, 0.3])
+    gup = list(getattr(st, "ladder_gap_up", [2.0, 1.5, 1.2, 1.0, 0.8]) or [2.0, 1.5, 1.2, 1.0, 0.8])
+    gdn = list(getattr(st, "ladder_gap_dn", [1.0, 0.8, 0.7, 0.5, 0.4]) or [1.0, 0.8, 0.7, 0.5, 0.4])
     enabled = list(getattr(st, "ladder_enabled", [True, True, True, True, True]) or [True, True, True, True, True])
-    d = float(getattr(st, "base_density", 2.0) or 2.0)
+    up = dn = None
     for i, r in enumerate(rates):
         if i >= len(enabled) or not enabled[i]:
-            continue  # 未勾选档：跳过
-        dd = dens[i] if i < len(dens) else None
-        if imbalance >= r and dd is not None:
-            d = float(dd)
-    return d
+            continue
+        if imbalance >= r:
+            if i < len(gup):
+                up = float(gup[i])
+            if i < len(gdn):
+                dn = float(gdn[i])
+    return up, dn
+
+
+def _ladder_density(st, imbalance) -> float:
+    """兼容旧调用：档位价差归一化返回单一值（用于 current_density 展示）。
+
+    2026-08-15 重构：档位不再用密度，改手填价差。此函数返回上端价差，
+    仅用于展示字段 current_density（不再参与间距计算）。
+    """
+    up, _ = _ladder_gap(st, imbalance)
+    return up if up is not None else float(getattr(st, "base_density", 2.0) or 2.0)
 
 
 def _heavy_side(st):
@@ -411,27 +424,36 @@ def calc_grid_levels(st) -> tuple[float, float]:
                 logger.debug(f"notify_imbalance: {e}")
         density = _ladder_density(st, imbalance)
 
-    # 间距 = ATR% × 当前网格密度。ATR未就绪时回退到可调间距参数。
+    # ── 间距计算（2026-08-15 重构：收网用手填价差，上下端分开）──
+    # 失衡 ≥ 任一启用档位 → 收网：upper/lower 直接用该档手填价差（gap_up/gap_dn，≥0.3%）
+    # 失衡 < 档1 → 正常网格：间距 = ATR% × base密度（或回退 target_spacing）
     atr = getattr(st, "atr_abs", 0.0) or 0.0
-    if atr > 0 and anchor > 0:
-        spacing = grid_spacing_pct(atr, anchor, density)
+    gap_up, gap_dn = _ladder_gap(st, imbalance)
+    if gap_up is not None and gap_dn is not None:
+        # 收网模式：手填价差（上下端分开），强制 ≥0.3% 兜底手续费
+        spacing_up = max(float(gap_up), 0.3)
+        spacing_dn = max(float(gap_dn), 0.3)
+        spacing = min(spacing_up, spacing_dn)  # 展示用
+        upper = anchor * (1 + spacing_up / 100)
+        lower = anchor * (1 - spacing_dn / 100)
     else:
-        spacing = getattr(st, "target_spacing_pct", 0.6) or 0.6
-    if spacing <= 0:
-        spacing = 0.6
-    # 网格密度下限钳制（文档§1.1）：密度 ≥ max(滑块设定, 2×费率÷ATR%)
-    # 让间距价格覆盖手续费（单位自洽）。ATR% = atr/anchor*100。
-    if atr > 0 and anchor > 0:
-        atr_pct = atr / anchor * 100  # ATR% 已是百分比数（如0.5 = 0.5%）
-        if atr_pct > 0:
-            fee_pct = 0.001  # 单边费率占位（0.1%）
-            density_floor = max(float(getattr(st, "density_min", 0.3) or 0.3), 2 * fee_pct / atr_pct)
-            density = max(density, density_floor)
-            # 密度可能被钳制抬升 → 重算间距
+        # 正常网格：间距 = ATR% × base密度；ATR未就绪回退 target_spacing
+        if atr > 0 and anchor > 0:
             spacing = grid_spacing_pct(atr, anchor, density)
-
-    upper = anchor * (1 + spacing / 100)
-    lower = anchor * (1 - spacing / 100)
+        else:
+            spacing = getattr(st, "target_spacing_pct", 0.6) or 0.6
+        if spacing <= 0:
+            spacing = 0.6
+        # 网格密度下限钳制（文档§1.1）：密度 ≥ max(滑块设定, 2×费率÷ATR%)
+        if atr > 0 and anchor > 0:
+            atr_pct = atr / anchor * 100
+            if atr_pct > 0:
+                fee_pct = 0.001  # 单边费率占位（0.1%）
+                density_floor = max(float(getattr(st, "density_min", 0.3) or 0.3), 2 * fee_pct / atr_pct)
+                density = max(density, density_floor)
+                spacing = grid_spacing_pct(atr, anchor, density)
+        upper = anchor * (1 + spacing / 100)
+        lower = anchor * (1 - spacing / 100)
 
     # bePx 双夹逼（仅 normal/在赚；紧急拆墙贴锚点不夹逼）
     if not emergency:
