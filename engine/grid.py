@@ -581,6 +581,11 @@ def place_grid_orders(st) -> dict:
     upper, lower = calc_grid_levels(st)
     # 记录挂单时的实际密度（档位密度实时生效用）：独立字段，不被 _refresh_grid_display 覆盖
     st.grid_placed_density = round(getattr(st, "current_density", 0.0) or 0.0, 3)
+    # 记录挂单时档位上下端价差快照（批次2修复：跨档重挂判断用，上下端分开）
+    _imb_pl = calc_imbalance_rate(st.position.long_contracts, st.position.short_contracts)
+    _gup_pl, _gdn_pl = _ladder_gap(st, _imb_pl)
+    st.grid_placed_gap = (round(float(_gup_pl), 4) if _gup_pl is not None else None,
+                          round(float(_gdn_pl), 4) if _gdn_pl is not None else None)
     n = _grid_step_contracts(st)
 
     # 成交模式：单向只挂平重仓侧
@@ -802,19 +807,21 @@ def check_grid_tick(st) -> None:
         place_grid_orders(st)
         return
 
-    # 两侧都在挂单等待中：① 失衡率跨档实时重挂（档位密度实时生效）② 超时未成交自动重挂
-    # 改动：档位密度实时生效（2026-08-14）——当前失衡率对应档位密度 ≠ 挂单时密度 → 撤单按新密度重挂
+    # 两侧都在挂单等待中：① 失衡率跨档实时重挂（档位价差实时生效）② 超时未成交自动重挂
+    # 2026-08-15 批次2修复：跨档判断用上下端价差快照，上下端任一变→重挂（原来只比上端会漏下端）
     try:
         from formulas.safety import calc_imbalance_rate
         _imb_now = calc_imbalance_rate(st.position.long_contracts, st.position.short_contracts)
-        _dens_now = _ladder_density(st, _imb_now)
-        # grid_placed_density 在挂单时由 place_grid_orders 记录（不被 _refresh_grid_display 覆盖）
-        _dens_placed = getattr(st, "grid_placed_density", None)
-        # 若跨档导致密度变化 → 实时重挂
-        if _dens_placed is not None and abs(_dens_now - _dens_placed) > 1e-9:
-            _log(st, f"⚙ 失衡跨档 密度 {_dens_placed}→{_dens_now} → 实时撤单重挂", cat="GRID")
-            place_grid_orders(st)
-            return
+        _gup_now, _gdn_now = _ladder_gap(st, _imb_now)
+        _gap_placed = getattr(st, "grid_placed_gap", None)
+        # 若跨档导致上下端任一价差变化 → 实时重挂
+        if _gap_placed is not None and (_gup_now is not None or _gdn_now is not None):
+            _cur = (round(float(_gup_now), 4) if _gup_now is not None else None,
+                    round(float(_gdn_now), 4) if _gdn_now is not None else None)
+            if _cur != _gap_placed:
+                _log(st, f"⚙ 失衡跨档 上下端价差 {_gap_placed}→{_cur} → 实时撤单重挂", cat="GRID")
+                place_grid_orders(st)
+                return
     except Exception as e:
         logger.debug(f"失衡跨档重挂检测: {e}")
     # 24h不成交自动重挂（系统自动做，不二次确认；撤单走安全保险只撤未成交单）
@@ -843,19 +850,30 @@ def _refresh_grid_display(st) -> None:
             sa = pos.short_avg_px or 0.0
             anchor = (la + sa) / 2 if (la > 0 and sa > 0) else (pos.last_px or pos.mark_px)
         atr = getattr(st, "atr_abs", 0.0) or 0.0
-        # 展示密度 = 实际挂单用的档位密度（与 calc_grid_levels/place_grid_orders 一致，防止前端显示≠实际挂单）
+        # 展示价差/间距 = 与 calc_grid_levels 完全同源（2026-08-15 批次2修复：防止前端显示≠实际挂单）
         try:
             from formulas.safety import calc_imbalance_rate
             _imb_disp = calc_imbalance_rate(pos.long_contracts, pos.short_contracts)
-            _density_disp = _ladder_density(st, _imb_disp)
+            _gap_up, _gap_dn = _ladder_gap(st, _imb_disp)
         except Exception:
-            _density_disp = _mode_base_density(st)
-        if atr > 0 and anchor > 0:
-            spacing = grid_spacing_pct(atr, anchor, _density_disp)
+            _gap_up, _gap_dn = None, None
+        if _gap_up is not None and _gap_dn is not None:
+            # 收网档：手填价差（上下端分开），与 calc_grid_levels 完全一致
+            _sp_up = max(float(_gap_up), 0.3)
+            _sp_dn = max(float(_gap_dn), 0.3)
+            spacing = min(_sp_up, _sp_dn)
+            upper = anchor * (1 + _sp_up / 100)
+            lower = anchor * (1 - _sp_dn / 100)
+            _density_disp = _gap_up
         else:
-            spacing = getattr(st, "target_spacing_pct", 0.6) or 0.6
-        upper = anchor * (1 + spacing / 100)
-        lower = anchor * (1 - spacing / 100)
+            # 正常网格：ATR% × base密度（与 calc_grid_levels 完全一致）
+            _density_disp = _mode_base_density(st)
+            if atr > 0 and anchor > 0:
+                spacing = grid_spacing_pct(atr, anchor, _density_disp)
+            else:
+                spacing = getattr(st, "target_spacing_pct", 0.6) or 0.6
+            upper = anchor * (1 + spacing / 100)
+            lower = anchor * (1 - spacing / 100)
         st.grid_spacing_pct = round(spacing, 2)
         st.grid_upper_px = px_round(st.inst_id, upper)
         st.grid_lower_px = px_round(st.inst_id, lower)
