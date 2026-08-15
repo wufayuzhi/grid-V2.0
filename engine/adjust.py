@@ -127,37 +127,79 @@ def check_adjust(st=None):
 
 
 def _do_rebalance(st, imbalance, target, _start_new_round=False):
-    """回补盈利侧：市价减重仓侧 rebalance_contracts 张。带冷却防每tick重复下单。
-    按回补周期计数：一轮回补(失衡≥触发→回到目标)只算1次，连续减仓多笔不重复计。"""
+    """分批回补·双向对开（2026-08-15 定稿）。
+
+    每批：平重仓 N + 开轻仓 N（总持仓不变，多空更均衡）。
+      N = (净敞口 − 目标净敞口) ÷ 2 ÷ 批数
+    挂限价贴近盘口（买→买一，卖→卖一）；限价超时未成交 → 转市价兜底。
+    默认降到中性（不押方向，趋势观察模式）。
+    批间间隔按 rebalance_batch_gap_min；批数 rebalance_batches。
+    """
     pos = st.position
-    # 冷却：距上次回补不足 N 秒则跳过（防高失衡下每2s连发）
     now = time.time()
+    # 冷却：距上次回补不足 N 秒则跳过（防高失衡下每2s连发）
     last = getattr(st, "last_rebalance_ts", 0.0)
     cooldown = max(st.data_loop_interval * 3, 5.0)
     if now - last < cooldown:
         return
     if pos.long_contracts > pos.short_contracts:
-        side, heavy, light = "long", pos.long_contracts, pos.short_contracts
+        heavy, light = "long", pos.short_contracts
     else:
-        side, heavy, light = "short", pos.short_contracts, pos.long_contracts
-    contracts = rebalance_contracts(heavy, light, st.rebalance_target_pct)
-    if contracts <= 0:
+        heavy, light = "short", pos.long_contracts
+
+    # 每批张数 = 净敞口需要化解 ÷ 2 ÷ 批数
+    total = pos.long_contracts + pos.short_contracts
+    net = abs(pos.long_contracts - pos.short_contracts)
+    target_net = total * (target / 100)
+    need_total = max(int(net - target_net), 0)
+    batches = max(int(getattr(st, "rebalance_batches", 2) or 2), 1)
+    per_batch = max(need_total // (2 * batches), 1)
+    if per_batch <= 0:
         return
-    # 减仓不能超过重仓侧净敞口（至少保留轻仓侧等量）
-    max_reduce = heavy - light
-    contracts = min(contracts, max_reduce)
-    if contracts <= 0:
-        return
-    from engine.trader import reduce_position
-    r = reduce_position(side, contracts)
-    if r.get("status") == "ok":
+
+    from engine.trader import rebalance_batch
+
+    # ── 分批状态机：检查是否有未完成批次 ──
+    cur_batch = getattr(st, "_rebalance_cur_batch", 0)
+    batch_start_ts = getattr(st, "_rebalance_batch_ts", 0.0)
+    gap_min = float(getattr(st, "rebalance_batch_gap_min", 20.0) or 20.0)
+    timeout_min = float(getattr(st, "rebalance_limit_timeout_min", 10.0) or 10.0)
+
+    if cur_batch == 0:
+        # 新一轮：执行批1（限价）
+        r = rebalance_batch(heavy, per_batch, use_limit=True)
+        if r.get("status") != "ok":
+            return
+        st._rebalance_cur_batch = 1
+        st._rebalance_batch_ts = now
         st.last_rebalance_ts = now
-        # 一轮回补开始才计1次（上次已完成回补，本次是新的一轮）
-        if getattr(st, "rebalance_complete", True) is True:
-            st.rebalance_cnt = (getattr(st, "rebalance_cnt", 0) or 0) + 1
-            st.rebalance_complete = False
-        _log(st, f"🔄 [回补] 失衡率={imbalance:.1f}% 减{side} {contracts}张→目标{st.rebalance_target_pct:.0f}% (第{st.rebalance_cnt}次)",
-             cat="REBAL", data={"imbalance": imbalance, "side": side, "contracts": contracts})
+        _log(st, f"🔄 [回补] 批1/{batches} 双向对开 平{heavy}{per_batch}+开轻仓{per_batch} (限价)",
+             cat="REBAL", data={"batch": 1, "total": batches, "per": per_batch, "heavy": heavy})
+        save_state_lazy(st)
+        return
+
+    # 已有批次在进行：检查批间间隔是否到 → 执行下一批
+    if cur_batch < batches and (now - batch_start_ts) >= gap_min * 60:
+        r = rebalance_batch(heavy, per_batch, use_limit=True)
+        if r.get("status") != "ok":
+            return
+        st._rebalance_cur_batch = cur_batch + 1
+        st._rebalance_batch_ts = now
+        st.last_rebalance_ts = now
+        _log(st, f"🔄 [回补] 批{cur_batch+1}/{batches} 双向对开 平{heavy}{per_batch}+开轻仓{per_batch} (限价)",
+             cat="REBAL", data={"batch": cur_batch + 1, "total": batches, "per": per_batch, "heavy": heavy})
+        save_state_lazy(st)
+        return
+
+    # 所有批次完成 → 重置状态机 + 标记网格重挂（回补后基于新持仓重挂）
+    if cur_batch >= batches:
+        st._rebalance_cur_batch = 0
+        st._rebalance_batch_ts = 0.0
+        st.rebalance_complete = True
+        st.rebalance_cnt = (getattr(st, "rebalance_cnt", 0) or 0) + 1
+        st._need_rehang = True  # 网格重挂用新持仓重算锚点
+        _log(st, f"🔄 [回补] 全部{batches}批完成，标记网格重挂",
+             cat="REBAL", data={"total_batches": batches, "cnt": st.rebalance_cnt})
         save_state_lazy(st)
 
 

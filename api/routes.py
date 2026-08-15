@@ -226,7 +226,8 @@ def _state_dict(st):
         "oi_full_refresh_interval", "oi_history_size", "oi_sample_count",
         "bleed_window_sec", "equity_history_window_sec", "api_timeout",
         "health_stale_sec", "health_max_failures", "tp_base_pct", "tp_window_hours",
-        "imbalance_threshold_pct", "rebalance_target_pct",
+        "imbalance_threshold_pct", "rebalance_target_pct", "rebalance_batches",
+        "rebalance_batch_gap_min", "rebalance_limit_timeout_min",
         "safety_factor", "shrink_pct", "bleed_threshold_pct",
     ):
         d[k] = getattr(st, k, None)
@@ -1679,7 +1680,8 @@ def register_routes(app: FastAPI):
                   "safety_factor", "shrink_pct", "oi_spike_pct", "oi_drop_pct",
                   "oi_lock_base", "bleed_threshold_pct",
                   "price_offset_pct", "adjust_split_ratio", "adj_ratio",
-                  "target_spacing_pct", "rebalance_target_pct",
+                  "target_spacing_pct", "rebalance_target_pct", "rebalance_batches",
+                  "rebalance_batch_gap_min", "rebalance_limit_timeout_min",
                   "tp_base_pct", "tp_window_hours",
                   "data_loop_interval", "oi_full_refresh_interval", "oi_history_size",
                   "oi_sample_count", "bleed_window_sec", "equity_history_window_sec",

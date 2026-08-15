@@ -79,6 +79,9 @@ def save_state():
         "tp_window_hours": st.tp_window_hours,
         "imbalance_threshold_pct": st.imbalance_threshold_pct,
         "rebalance_target_pct": st.rebalance_target_pct,
+        "rebalance_batches": st.rebalance_batches,
+        "rebalance_batch_gap_min": st.rebalance_batch_gap_min,
+        "rebalance_limit_timeout_min": st.rebalance_limit_timeout_min,
         "safety_factor": st.safety_factor,
         "shrink_pct": st.shrink_pct,
         "bleed_threshold_pct": st.bleed_threshold_pct,
@@ -219,6 +222,9 @@ def load_state() -> GridState:
         st.tp_window_hours = data.get("tp_window_hours", 24.0)
         st.imbalance_threshold_pct = data.get("imbalance_threshold_pct", 80.0)
         st.rebalance_target_pct = data.get("rebalance_target_pct", 40.0)
+        st.rebalance_batches = data.get("rebalance_batches", 2)
+        st.rebalance_batch_gap_min = data.get("rebalance_batch_gap_min", 20.0)
+        st.rebalance_limit_timeout_min = data.get("rebalance_limit_timeout_min", 10.0)
         st.safety_factor = data.get("safety_factor", 0.7)
         st.shrink_pct = data.get("shrink_pct", 10.0)
         st.bleed_threshold_pct = data.get("bleed_threshold_pct", 3.0)

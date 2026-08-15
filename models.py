@@ -88,6 +88,9 @@ class GridState:
     # 失衡率
     imbalance_threshold_pct: float = 80.0   # 回补触发失衡率（0-100，默认80）
     rebalance_target_pct: float = 40.0      # 回补目标失衡率（0-100，默认40，须<触发）
+    rebalance_batches: int = 2              # 回补批数（滑块2~3，默认2）
+    rebalance_batch_gap_min: float = 20.0   # 批间间隔（分钟，滑块5/15/30，默认20）
+    rebalance_limit_timeout_min: float = 10.0  # 限价超时未成交转市价（分钟，默认10）
     # 风控
     safety_factor: float = 0.7
     shrink_pct: float = 10.0
@@ -297,6 +300,9 @@ class GridState:
                 "tp_base_pct": self.tp_base_pct,
                 "tp_window_hours": self.tp_window_hours,
                 "rebalance_target_pct": self.rebalance_target_pct,
+                "rebalance_batches": self.rebalance_batches,
+                "rebalance_batch_gap_min": self.rebalance_batch_gap_min,
+                "rebalance_limit_timeout_min": self.rebalance_limit_timeout_min,
                 "price_offset_pct": self.price_offset_pct,
                 "adjust_split_ratio": self.adjust_split_ratio,
                 "data_loop_interval": self.data_loop_interval,

@@ -109,6 +109,81 @@ def reduce_position(side: str, contracts: int) -> dict:
     return {"status": "ok"}
 
 
+def rebalance_batch(heavy: str, n: int, use_limit: bool = True) -> dict:
+    """分批回补·双向对开执行器（2026-08-15 定稿）。
+
+    heavy: 重仓侧 long/short；n: 每批张数（双向各半，平重仓n + 开轻仓n）。
+    总持仓不变：平重仓n + 开轻仓n，多空更均衡。
+    use_limit=True → 挂限价贴近盘口（买→买一bid，卖→卖一ask），maker秒成；
+    use_limit=False → 市价兜底（限价超时转市价时用）。
+    返回 {"status":"ok"/"error", ...}。
+    """
+    st = get_state()
+    if n <= 0:
+        return {"status": "error", "msg": "回补张数必须>0"}
+    client = get_auth_client()
+    if client is None:
+        return {"status": "error", "msg": "认证客户端未就绪"}
+    inst = st.inst_id
+
+    # 盘口价：优先用行情缓存 bid/ask，回退 mark
+    _px = {"bid": st.position.mark_px, "ask": st.position.mark_px}
+    try:
+        from data.ticker import get_ticker_cache
+        for e in get_ticker_cache():
+            if e.get("inst_id") == inst:
+                _px["bid"] = e.get("bid_px") or e.get("mark_px") or _px["bid"]
+                _px["ask"] = e.get("ask_px") or e.get("mark_px") or _px["ask"]
+                break
+    except Exception:
+        pass
+    bid_px, ask_px = _px["bid"], _px["ask"]
+
+    if heavy == "short":
+        # 重仓空 → 平空(买) + 开多(买)，双向都是 buy，买一价
+        orders = [
+            {"instId": inst, "tdMode": "cross", "side": "buy", "posSide": "short",
+             "ordType": "limit" if use_limit else "market", "sz": str(n),
+             "px": str(bid_px or 0) if use_limit else None},
+            {"instId": inst, "tdMode": "cross", "side": "buy", "posSide": "long",
+             "ordType": "limit" if use_limit else "market", "sz": str(n),
+             "px": str(bid_px or 0) if use_limit else None},
+        ]
+    else:
+        # 重仓多 → 平多(卖) + 开空(卖)，双向都是 sell，卖一价
+        orders = [
+            {"instId": inst, "tdMode": "cross", "side": "sell", "posSide": "long",
+             "ordType": "limit" if use_limit else "market", "sz": str(n),
+             "px": str(ask_px or 0) if use_limit else None},
+            {"instId": inst, "tdMode": "cross", "side": "sell", "posSide": "short",
+             "ordType": "limit" if use_limit else "market", "sz": str(n),
+             "px": str(ask_px or 0) if use_limit else None},
+        ]
+    # market 单去掉 px 字段
+    if not use_limit:
+        for o in orders:
+            o.pop("px", None)
+
+    try:
+        result = client.batch_orders(orders)
+    except Exception as e:
+        _log(st, f"❌ 回补双向对开异常: {e}", level="ERROR")
+        return {"status": "error", "msg": f"回补失败: {e}"}
+    if not result or result.get("code") not in ("0", None):
+        _log(st, f"❌ 回补双向对开被拒: {result}", level="ERROR")
+        return {"status": "error", "msg": f"回补失败: {result.get('msg','') if result else '无响应'}"}
+    subs = result.get("data", [])
+    failures = [f"{so.get('sCode','')}:{so.get('sMsg','')}" for so in subs if so.get("sCode", "0") != "0"]
+    if failures:
+        _log(st, f"⚠️ 回补部分失败: {'; '.join(failures)}", level="WARN")
+        return {"status": "error", "msg": f"回补部分失败: {'; '.join(failures)}"}
+    mode = "限价" if use_limit else "市价"
+    _log(st, f"🔄 回补({mode}): {heavy}侧双向对开 平{heavy}{n}+开轻仓{n}",
+         cat="REBAL", data={"heavy": heavy, "n": n, "mode": mode})
+    sync_positions()
+    return {"status": "ok"}
+
+
 def close_side(side: str, contracts: int) -> dict:
     """平单侧仓位（side: long/short），用于回补/缩仓/全平。"""
     st = get_state()
