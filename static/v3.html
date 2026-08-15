@@ -1087,7 +1087,6 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
           <input type="range" class="mod-slider" id="mod-shrink_pct" min="5" max="30" step="1" value="10" oninput="onModChange('shrink_pct',this)">
           <div class="pm-note">预警区每次缩仓的百分比（哪边重缩哪边）</div>
           <div class="pm-div"></div>
-          <div class="sw-row"><label><input type="checkbox" id="mod-use_bleed_melt" checked onchange="onModBoolChange('use_bleed_melt',this)"> 失血熔断全平（5秒窗口回撤）</label></div>
           <div class="sw-row"><label><input type="checkbox" id="mod-use_safety_flat" checked onchange="onModBoolChange('use_safety_flat',this)"> 安全距离全平（强平空间兜底）</label></div>
           <div class="pm-div"></div>
           <div class="sl-row"><span>安全距离全平阈值%</span><span class="sl-val" id="sl-safety_flat_threshold">5</span></div>
@@ -1133,15 +1132,6 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
             </span>
           </div>
           <div class="pm-note">勾选=限价超时未成交→转市价兜底(保证回补完成)；不勾选=只挂限价等成交</div>
-          <div class="sl-row"><span>OI暴增锁%</span><span class="sl-val" id="sl-oi_spike_pct">15</span></div>
-          <input type="range" class="mod-slider" id="mod-oi_spike_pct" min="5" max="30" step="1" value="15" oninput="onModChange('oi_spike_pct',this)">
-          <div class="pm-note">OI 变化率 ≥ 此% 时锁死调平（疑似大单边，避免接刀）</div>
-          <div class="sl-row"><span>OI下降解锁%</span><span class="sl-val" id="sl-oi_drop_pct">-5</span></div>
-          <input type="range" class="mod-slider" id="mod-oi_drop_pct" min="-15" max="0" step="1" value="-5" oninput="onModChange('oi_drop_pct',this)">
-          <div class="pm-note">OI 变化率 ≤ 此% 时解锁恢复调平（疑似假突破/衰竭）</div>
-          <div class="sl-row"><span>OI锁轮数</span><span class="sl-val" id="sl-oi_lock_base">5</span></div>
-          <input type="range" class="mod-slider" id="mod-oi_lock_base" min="2" max="10" step="1" value="5" oninput="onModChange('oi_lock_base',this)">
-          <div class="pm-note">OI暴增后持续锁定的轮数（防刚解锁又暴涨）</div>
           <div class="pm-div"></div>
           <div class="sl-row"><span>单向成交阈值%</span><span class="sl-val" id="sl-one_way_threshold">60</span></div>
           <input type="range" class="mod-slider" id="mod-one_way_threshold" min="30" max="90" step="1" value="60" oninput="onModChange('one_way_threshold',this)">
@@ -1202,6 +1192,8 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
       <!-- 🩸 失血熔断组（从风控拆出独立） -->
       <div class="pm-group" id="pmg-bleed">
         <div class="pm-left">
+          <div class="sw-row"><label><input type="checkbox" id="mod-use_bleed_melt" checked onchange="onModBoolChange('use_bleed_melt',this)"> 失血熔断全平（5秒窗口回撤）</label></div>
+          <div class="pm-div"></div>
           <div class="sl-row"><span>失血熔断%</span><span class="sl-val" id="sl-bleed_threshold_pct">3.0</span></div>
           <input type="range" class="mod-slider" id="mod-bleed_threshold_pct" min="1" max="10" step="0.5" value="3.0" oninput="onModChange('bleed_threshold_pct',this)">
           <div class="pm-note">权益亏损 ≥ 此% 时熔断（全平止损）</div>
@@ -2055,9 +2047,7 @@ async function refresh() {
         ['mod-adj_ratio','adj_ratio'],
         ['mod-price_offset_pct','price_offset_pct'],
         ['mod-imbalance_threshold_pct','imbalance_threshold_pct'],
-        ['mod-oi_spike_pct','oi_spike_pct'],
-        ['mod-oi_drop_pct','oi_drop_pct'],
-        ['mod-oi_lock_base','oi_lock_base'],
+        ['mod-oi_full_refresh_interval','oi_full_refresh_interval'],
         ['mod-iceberg_sz','iceberg_sz'],
         ['mod-pxVar','pxVar'],
         ['mod-rebalance_target_pct','rebalance_target_pct'],
@@ -3382,7 +3372,7 @@ const PM_KEYS = {
   grid: ['base_density','density_min','atr_timeframe','atr_period','adj_ratio'],
   risk: ['safety_factor','shrink_pct',
          'safety_flat_threshold'],
-  imb:  ['imbalance_threshold_pct','rebalance_target_pct','oi_spike_pct','oi_drop_pct','oi_lock_base',
+  imb:  ['imbalance_threshold_pct','rebalance_target_pct',
          'one_way_threshold','confirm_time','exit_buffer','debounce_loss_line','debounce_profit_line',
          'lr1','lr2','lr3','lr4','lr5','ld1','ld2','ld3','ld4','ld5'],
   ice:  ['iceberg_sz','pxVar'],
@@ -3393,7 +3383,7 @@ const PM_KEYS = {
 const PM_MAP = {
   grid: { fm: 'pm-fm-grid_spacing', sliders: [['mod-base_density','sl-base_density','base_density'],['mod-density_min','sl-density_min','density_min'],['mod-atr_timeframe','sl-atr_timeframe','atr_timeframe'],['mod-atr_period','sl-atr_period','atr_period']] },
   risk: { fm: 'pm-fm-effective_params', sliders: [['mod-safety_factor','sl-safety_factor','safety_factor'],['mod-shrink_pct','sl-shrink_pct','shrink_pct'],['mod-safety_flat_threshold','sl-safety_flat_threshold','safety_flat_threshold']] },
-  imb:  { fm: '', sliders: [['mod-imbalance_threshold_pct','sl-imbalance_threshold_pct','imbalance_threshold_pct'],['mod-rebalance_target_pct','sl-rebalance_target_pct','rebalance_target_pct'],['mod-rebalance_batches','sl-rebalance_batches','rebalance_batches'],['mod-rebalance_batch_gap_min','sl-rebalance_batch_gap_min','rebalance_batch_gap_min'],['mod-rebalance_limit_timeout_min','sl-rebalance_limit_timeout_min','rebalance_limit_timeout_min'],['mod-oi_spike_pct','sl-oi_spike_pct','oi_spike_pct'],['mod-oi_drop_pct','sl-oi_drop_pct','oi_drop_pct'],['mod-oi_lock_base','sl-oi_lock_base','oi_lock_base'],['mod-one_way_threshold','sl-one_way_threshold','one_way_threshold'],['mod-confirm_time','sl-confirm_time','confirm_time'],['mod-exit_buffer','sl-exit_buffer','exit_buffer'],['mod-debounce_loss_line','sl-debounce_loss_line','debounce_loss_line'],['mod-debounce_profit_line','sl-debounce_profit_line','debounce_profit_line']] },
+  imb:  { fm: '', sliders: [['mod-imbalance_threshold_pct','sl-imbalance_threshold_pct','imbalance_threshold_pct'],['mod-rebalance_target_pct','sl-rebalance_target_pct','rebalance_target_pct'],['mod-rebalance_batches','sl-rebalance_batches','rebalance_batches'],['mod-rebalance_batch_gap_min','sl-rebalance_batch_gap_min','rebalance_batch_gap_min'],['mod-rebalance_limit_timeout_min','sl-rebalance_limit_timeout_min','rebalance_limit_timeout_min'],['mod-one_way_threshold','sl-one_way_threshold','one_way_threshold'],['mod-confirm_time','sl-confirm_time','confirm_time'],['mod-exit_buffer','sl-exit_buffer','exit_buffer'],['mod-debounce_loss_line','sl-debounce_loss_line','debounce_loss_line'],['mod-debounce_profit_line','sl-debounce_profit_line','debounce_profit_line']] },
   ice:  { fm: 'pm-fm-iceberg', sliders: [['mod-iceberg_sz','sl-iceberg_sz','iceberg_sz'],['mod-pxVar','sl-pxVar','pxVar']] },
   bleed:{ fm: '', sliders: [['mod-bleed_threshold_pct','sl-bleed_threshold_pct','bleed_threshold_pct'],['mod-bleed_window_sec','sl-bleed_window_sec','bleed_window_sec'],['mod-equity_history_window_sec','sl-equity_history_window_sec','equity_history_window_sec']] },
   ind:  { fm: 'pm-fm-zone',    sliders: [['mod-tp_base_pct','sl-tp_base_pct','tp_base_pct'],['mod-tp_window_hours','sl-tp_window_hours','tp_window_hours']] },
@@ -3570,15 +3560,11 @@ function updatePMResult(kind) {
   } else if (kind === 'imb') {
     const th = g('mod-imbalance_threshold_pct') || 80;
     const rt = g('mod-rebalance_target_pct') || 40;
-    const spike = g('mod-oi_spike_pct') || 15;
-    const drop = g('mod-oi_drop_pct') || -5;
     h = _pmRow('当前失衡率', imb.toFixed(1) + '%');
     h += _pmRow('回补触发', th + '%', true);
     h += _pmRow(imb >= th ? '⚠️ 已触发回补' : '距触发还差', imb >= th ? (imb - th).toFixed(1) + '%' : (th - imb).toFixed(1) + '%');
     h += _pmRow('回补目标', rt + '%（须<' + th + '%）');
     h += _pmRow('回补量(净敞口/2)', (Math.abs(net) / 2).toFixed(1) + ' 张', true);
-    h += _pmRow('OI暴增锁≥', spike + '%');
-    h += _pmRow('OI下降解锁≤', drop + '%');
   } else if (kind === 'ice') {
     const sz = g('mod-iceberg_sz') || 2;
     const pv = g('mod-pxVar') || 1.0;
@@ -3643,7 +3629,7 @@ function applyPreset(type, el) {
     conservative: {
       safety_factor: 0.85, shrink_pct: 25, bleed_threshold_pct: 5,
       target_spacing_pct: 0.40, adj_ratio: 0.04,
-      imbalance_threshold_pct: 10, oi_spike_pct: 10, oi_drop_pct: -8, oi_lock_base: 7,
+      imbalance_threshold_pct: 10,
       iceberg_sz: 1, pxVar: 1.5,
       tp_base_pct: 1.5, tp_window_hours: 24, rebalance_target_pct: 8,
       adjust_split_ratio: 0.40
@@ -3651,7 +3637,7 @@ function applyPreset(type, el) {
     standard: {
       safety_factor: 0.70, shrink_pct: 10, bleed_threshold_pct: 3,
       target_spacing_pct: 0.60, adj_ratio: 0.06,
-      imbalance_threshold_pct: 20, oi_spike_pct: 15, oi_drop_pct: -5, oi_lock_base: 5,
+      imbalance_threshold_pct: 20,
       iceberg_sz: 2, pxVar: 1.0,
       tp_base_pct: 1.0, tp_window_hours: 24, rebalance_target_pct: 10,
       adjust_split_ratio: 0.50
@@ -3659,7 +3645,7 @@ function applyPreset(type, el) {
     aggressive: {
       safety_factor: 0.45, shrink_pct: 5, bleed_threshold_pct: 2,
       target_spacing_pct: 0.85, adj_ratio: 0.10,
-      imbalance_threshold_pct: 35, oi_spike_pct: 25, oi_drop_pct: -3, oi_lock_base: 3,
+      imbalance_threshold_pct: 35,
       iceberg_sz: 4, pxVar: 0.8,
       tp_base_pct: 0.8, tp_window_hours: 24, rebalance_target_pct: 12,
       adjust_split_ratio: 0.60

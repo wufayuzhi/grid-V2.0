@@ -116,12 +116,8 @@ def save_state():
         "ema_slow": st.ema_slow,
         "st_period": st.st_period,
         "st_mult": st.st_mult,
-        "oi_n": st.oi_n,
         "iceberg_sz": st.iceberg_sz,
         "pxVar": st.pxVar,
-        "oi_spike_pct": st.oi_spike_pct,
-        "oi_drop_pct": st.oi_drop_pct,
-        "oi_lock_base": st.oi_lock_base,
         "auto_adjust": st.auto_adjust,
         "grid_auto_run": st.grid_auto_run,
         "use_iceberg": st.use_iceberg,
@@ -270,12 +266,8 @@ def load_state() -> GridState:
         st.ema_slow = data.get("ema_slow", 55)
         st.st_period = data.get("st_period", 14)
         st.st_mult = data.get("st_mult", 3.0)
-        st.oi_n = data.get("oi_n", 3)
         st.iceberg_sz = data.get("iceberg_sz", 2)
         st.pxVar = data.get("pxVar", 1.0)
-        st.oi_spike_pct = data.get("oi_spike_pct", 15.0)
-        st.oi_drop_pct = data.get("oi_drop_pct", -5.0)
-        st.oi_lock_base = data.get("oi_lock_base", 5)
         st.auto_adjust = data.get("auto_adjust", True)
         st.grid_auto_run = data.get("grid_auto_run", True)
         st.use_iceberg = data.get("use_iceberg", True)

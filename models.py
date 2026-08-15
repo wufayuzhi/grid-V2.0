@@ -104,10 +104,6 @@ class GridState:
     # 冰山
     iceberg_sz: int = 2
     pxVar: float = 1.0
-    # OI
-    oi_spike_pct: float = 15.0
-    oi_drop_pct: float = -5.0
-    oi_lock_base: int = 5
     # 开关
     auto_adjust: bool = True
     grid_auto_run: bool = True   # 网格自动运行（挂单）总开关，与失衡率解耦（2026-08-14）
@@ -153,7 +149,6 @@ class GridState:
     ema_slow: int = 55            # EMA慢周期(文档:55)
     st_period: int = 14           # SuperTrend ATR周期(文档:14, 代码现在是10错)
     st_mult: float = 3.0          # SuperTrend 乘数(文档:3)
-    oi_n: int = 3                 # OI根数N(滑块1~10, OI窗口=N×趋势TF)
 
 
     # ── 币种特征 ──
@@ -291,9 +286,6 @@ class GridState:
                 "use_rebalance": self.use_rebalance,
                 "safety_factor": self.safety_factor,
                 "shrink_pct": self.shrink_pct,
-                "oi_spike_pct": self.oi_spike_pct,
-                "oi_drop_pct": self.oi_drop_pct,
-                "oi_lock_base": self.oi_lock_base,
                 "bleed_threshold_pct": self.bleed_threshold_pct,
                 "tp_base_pct": self.tp_base_pct,
                 "tp_window_hours": self.tp_window_hours,
@@ -342,7 +334,7 @@ class GridState:
                 "ema_slow": getattr(self, "ema_slow", None),
                 "st_period": getattr(self, "st_period", None),
                 "st_mult": getattr(self, "st_mult", None),
-                "oi_n": getattr(self, "oi_n", None),
+                "oi_n": None,
                 "current_density": getattr(self, "current_density", None),
                 "grid_spacing_pct": round(float(getattr(self, "grid_spacing_pct", 0.0) or 0.0), 3),
                 "grid_anchor_px": round(float(getattr(self, "grid_anchor_px", 0.0) or 0.0), 8),

@@ -220,7 +220,7 @@ def _state_dict(st):
         "grid_upper_px", "grid_lower_px", "pending_iceberg", "initial_contracts",
         "single_limit", "build_ts", "paused", "target_spacing_pct", "adj_ratio",
         "price_offset_pct", "adjust_split_ratio", "iceberg_sz", "pxVar",
-        "oi_spike_pct", "oi_drop_pct", "oi_lock_base", "auto_adjust", "use_iceberg",
+        "auto_adjust", "use_iceberg",
         "use_risk_control", "use_bleed_melt", "use_dynamic_params",
         "coin_amplitude_24h", "amp_7d", "dr_24h", "dr_7d", "data_loop_interval",
         "oi_full_refresh_interval", "oi_history_size", "oi_sample_count",
@@ -266,9 +266,6 @@ def _state_dict(st):
         "use_safety_flat": getattr(st, "use_safety_flat", True),
         "safety_factor": getattr(st, "safety_factor", 0.7),
         "shrink_pct": getattr(st, "shrink_pct", 10.0),
-        "oi_spike_pct": getattr(st, "oi_spike_pct", 15.0),
-        "oi_drop_pct": getattr(st, "oi_drop_pct", -5.0),
-        "oi_lock_base": getattr(st, "oi_lock_base", 5),
         "bleed_threshold_pct": getattr(st, "bleed_threshold_pct", 3.0),
         "price_offset_pct": getattr(st, "price_offset_pct", 0.2),
         "adjust_split_ratio": getattr(st, "adjust_split_ratio", 0.5),
@@ -1676,8 +1673,8 @@ def register_routes(app: FastAPI):
                   "iceberg_sz", "pxVar", "auto_adjust", "grid_auto_run", "use_iceberg",
                   "use_risk_control", "use_bleed_melt",
                   "use_safety_flat", "use_rebalance",
-                  "safety_factor", "shrink_pct", "oi_spike_pct", "oi_drop_pct",
-                  "oi_lock_base", "bleed_threshold_pct",
+                  "safety_factor", "shrink_pct",
+                  "bleed_threshold_pct",
                   "price_offset_pct", "adjust_split_ratio", "adj_ratio",
                   "target_spacing_pct", "rebalance_target_pct", "rebalance_batches",
                   "rebalance_batch_gap_min", "rebalance_limit_timeout_min", "rebalance_market_after_timeout",
@@ -1691,7 +1688,7 @@ def register_routes(app: FastAPI):
                   "debounce_profit_line", "atr_timeframe", "atr_period", "density_min",
                   "safety_flat_threshold",
                   "trend_tf", "ema_fast", "ema_slow", "st_period", "st_mult",
-                  "oi_n"]:
+                  ]:
             if k in req:
                 old_val = getattr(st, k, None)
                 new_val = req[k]
