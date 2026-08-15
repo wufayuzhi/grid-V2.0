@@ -180,9 +180,21 @@ def _do_rebalance(st, imbalance, target, _start_new_round=False):
 
     # 已有批次在进行：检查批间间隔是否到 → 执行下一批
     if cur_batch < batches and (now - batch_start_ts) >= gap_min * 60:
-        # 超时转市价判断：距上次批次已超 timeout 且开关开启 → 上一批限价单未成交 → 转市价兜底
+        # 超时转市价判断：距上次批次已超 timeout 且开关开启 → 上一批限价单未成交 → 先撤限价再转市价兜底
         market_now = (getattr(st, "rebalance_market_after_timeout", True)
                       and (now - batch_start_ts) >= timeout_min * 60)
+        if market_now:
+            # ① 先撤掉上一批未成交的限价单，避免与市价单重复
+            pend_ids = getattr(st, "_rebalance_pending_ord_ids", []) or []
+            if pend_ids:
+                try:
+                    from engine.grid import _cancel_orders
+                    _cancel_orders(st, pend_ids)
+                    _log(st, f"🔄 [回补] 限价超时，先撤未成交单 {len(pend_ids)} 张",
+                         cat="REBAL", data={"cancel_ids": pend_ids})
+                except Exception as e:
+                    _log(st, f"⚠️ [回补] 撤限价单失败: {e}（继续转市价）", level="WARN", cat="REBAL")
+                st._rebalance_pending_ord_ids = []
         r = rebalance_batch(heavy, per_batch, use_limit=not market_now)
         if r.get("status") != "ok":
             return

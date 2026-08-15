@@ -178,8 +178,14 @@ def rebalance_batch(heavy: str, n: int, use_limit: bool = True) -> dict:
         _log(st, f"⚠️ 回补部分失败: {'; '.join(failures)}", level="WARN")
         return {"status": "error", "msg": f"回补部分失败: {'; '.join(failures)}"}
     mode = "限价" if use_limit else "市价"
+    # 记录本次回补单 ordId（限价单超时转市价前需先撤；市价单无需撤）
+    if use_limit:
+        st._rebalance_pending_ord_ids = [so.get("ordId", "") for so in subs if so.get("ordId")]
+    else:
+        st._rebalance_pending_ord_ids = []
     _log(st, f"🔄 回补({mode}): {heavy}侧双向对开 平{heavy}{n}+开轻仓{n}",
-         cat="REBAL", data={"heavy": heavy, "n": n, "mode": mode})
+         cat="REBAL", data={"heavy": heavy, "n": n, "mode": mode,
+                            "ord_ids": st._rebalance_pending_ord_ids})
     sync_positions()
     return {"status": "ok"}
 
