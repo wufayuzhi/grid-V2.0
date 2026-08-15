@@ -124,6 +124,8 @@ def save_state():
         "use_iceberg": st.use_iceberg,
         "use_risk_control": st.use_risk_control,
         "use_bleed_melt": st.use_bleed_melt,
+        "use_cumulative_drawdown_flat": st.use_cumulative_drawdown_flat,
+        "use_safety_flat": st.use_safety_flat,
         "use_dynamic_params": st.use_dynamic_params,
         "coin_amplitude_24h": st.coin_amplitude_24h,
         "amp_7d": st.amp_7d,
@@ -262,6 +264,8 @@ def load_state() -> GridState:
         st.use_iceberg = data.get("use_iceberg", True)
         st.use_risk_control = data.get("use_risk_control", True)
         st.use_bleed_melt = data.get("use_bleed_melt", True)
+        st.use_cumulative_drawdown_flat = data.get("use_cumulative_drawdown_flat", True)
+        st.use_safety_flat = data.get("use_safety_flat", True)
         st.use_dynamic_params = data.get("use_dynamic_params", True)
         st.coin_amplitude_24h = data.get("coin_amplitude_24h", 0)
         st.amp_7d = data.get("amp_7d", 0)

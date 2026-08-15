@@ -1087,6 +1087,10 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
           <input type="range" class="mod-slider" id="mod-shrink_pct" min="5" max="30" step="1" value="10" oninput="onModChange('shrink_pct',this)">
           <div class="pm-note">预警区每次缩仓的百分比（哪边重缩哪边）</div>
           <div class="pm-div"></div>
+          <div class="sw-row"><label><input type="checkbox" id="mod-use_bleed_melt" checked onchange="onModBoolChange('use_bleed_melt',this)"> 失血熔断全平（5秒窗口回撤）</label></div>
+          <div class="sw-row"><label><input type="checkbox" id="mod-use_cumulative_drawdown_flat" checked onchange="onModBoolChange('use_cumulative_drawdown_flat',this)"> 累计回撤全平（高水位阴跌兜底）</label></div>
+          <div class="sw-row"><label><input type="checkbox" id="mod-use_safety_flat" checked onchange="onModBoolChange('use_safety_flat',this)"> 安全距离全平（强平空间兜底）</label></div>
+          <div class="pm-div"></div>
           <div class="sl-row"><span>累计回撤阈值%</span><span class="sl-val" id="sl-cumulative_drawdown_threshold">5</span></div>
           <input type="range" class="mod-slider" id="mod-cumulative_drawdown_threshold" min="3" max="15" step="1" value="5" oninput="onModChange('cumulative_drawdown_threshold',this)">
           <div class="pm-note">高水位峰值upl回撤 ≥ 此% 时全平（慢速阴跌兜底）</div>
@@ -2087,6 +2091,12 @@ async function refresh() {
     const rebOn = !!(S.params && S.params.use_rebalance);
     if (swReb) swReb.classList.toggle('on', rebOn);
     if (txtReb) txtReb.textContent = rebOn ? '开' : '关';
+
+    // ── 风控三保险 checkbox 开关状态同步（失血/累计回撤/安全距离）──
+    ['use_bleed_melt', 'use_cumulative_drawdown_flat', 'use_safety_flat'].forEach((k) => {
+      const cb = document.getElementById('mod-' + k);
+      if (cb && S.params && S.params[k] !== undefined) cb.checked = !!S.params[k];
+    });
 
     // ── Metrics Row ──
     document.getElementById('m-eq').textContent = (S.total_equity || 0).toLocaleString();
@@ -3309,6 +3319,11 @@ function onModChange(key, el) {
       _pendingChanges.adj_ratio = sugg;
     }
   }
+  updatePMResultAll();
+}
+
+function onModBoolChange(key, el) {
+  _pendingChanges[key] = el.checked;
   updatePMResultAll();
 }
 

@@ -110,6 +110,8 @@ class GridState:
     use_iceberg: bool = True
     use_risk_control: bool = True
     use_bleed_melt: bool = True
+    use_cumulative_drawdown_flat: bool = True   # 累计回撤全平保险开关(2026-08-15新增,默认开)
+    use_safety_flat: bool = True                # 安全距离全平保险开关(2026-08-15新增,默认开)
     use_dynamic_params: bool = True
     # 失衡回补(B)开关：默认关=以A(挂单调价格/单边防堆仓)为主，失衡靠盈亏平衡点抬升渐进化解；
     # 开启时才在失衡>阈值时市价减重仓侧(主动砍仓)，默认停用(用户2026-08定案)

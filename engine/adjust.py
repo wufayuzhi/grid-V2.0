@@ -177,6 +177,8 @@ def _check_cumulative_drawdown(st) -> bool:
     累计回撤 = (峰值upl − 最新upl) ÷ (账户权益 − 累计追加本金) × 100%（高水位）
     peak_upl 由 tick 层每轮更新（max 高水位）；建仓/全平后重置。
     """
+    if not getattr(st, "use_cumulative_drawdown_flat", True):
+        return False
     try:
         from formulas.drawdown import calc_cumulative_drawdown_pct
         pos = st.position
@@ -209,6 +211,8 @@ def _check_safety_flat(st) -> bool:
     独立于失衡率触发（文档§七）：只要离爆仓近就出手，不等到失衡≥70%。
     liqPx 异常缺失 → 告警 + 暂停判定（不静默当安全）。
     """
+    if not getattr(st, "use_safety_flat", True):
+        return False
     try:
         from formulas.safety import calc_safety_distance
         pos = st.position
