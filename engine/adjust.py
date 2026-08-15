@@ -86,10 +86,8 @@ def check_adjust(st=None):
     if not st.running or st.paused:
         return
 
-    # ── 优先级1：失血熔断（速度窗）+ 累计回撤（高水位），并联 ──
+    # ── 优先级1：失血熔断（速度窗，双确认）──
     if _check_bleed_melt(st):
-        return
-    if _check_cumulative_drawdown(st):
         return
 
     # ── 优先级2：安全距离兜底（空间防线，独立于失衡率）──
@@ -263,17 +261,31 @@ def _check_bleed_melt(st) -> bool:
 
     口径修正（定稿）：回撤 = (窗口前权益 − 当前权益) ÷ 窗口前权益 × 100%。
     之前误用"净浮盈绝对值"阈值，现改为权益回撤速率（物理网线语义）。
+
+    双确认（定稿，不加系数）：
+      触发 = 权益窗口回撤 > 失血阈值 且 安全距离 < 安全距离阈值
+      目的：影线针瞬间回撤快但价格拉回、安全距离没缩 → 不触发（吃针利润）；
+            真崩盘回撤快 + 离强平近 → 触发全平。
     """
     if not st.use_bleed_melt:
         return False
     try:
         dd = _window_drawdown_pct(st)
         if dd > st.bleed_threshold_pct:
-            _log(st, f"🩸 [失血] 权益回撤 {dd:.2f}% > 阈值{st.bleed_threshold_pct:.1f}% → 熔断",
-                 level="WARN", cat="RISK", data={"drawdown_pct": round(dd, 2)})
+            # 双确认第二道闸门：安全距离必须缩到危险线内
+            sd = getattr(st, "safety_distance_pct", 999.0)
+            if not (0 <= sd < st.safety_flat_threshold):
+                # 影线针/闪插：回撤快但离爆仓仍远 → 不触发失血，网格继续吃针利润
+                _log(st, f"🩸 [失血] 权益回撤 {dd:.2f}% > 阈值{st.bleed_threshold_pct:.1f}% "
+                         f"但安全距离{sd:.1f}% ≥ 危险线{st.safety_flat_threshold:.1f}% → 视为影线针不触发",
+                     level="INFO", cat="RISK", data={"drawdown_pct": round(dd, 2), "safety_distance_pct": round(sd, 2)})
+                return False
+            _log(st, f"🩸 [失血] 权益回撤 {dd:.2f}% > 阈值{st.bleed_threshold_pct:.1f}% "
+                     f"且安全距离{sd:.1f}% < 危险线{st.safety_flat_threshold:.1f}% → 熔断",
+                 level="WARN", cat="RISK", data={"drawdown_pct": round(dd, 2), "safety_distance_pct": round(sd, 2)})
             try:
                 from notify import on_bleed
-                on_bleed(f"{dd:.2f}%/窗", round(st.total_equity or 0, 2))
+                on_bleed(f"{dd:.2f}%/窗 安全距离{sd:.1f}%", round(st.total_equity or 0, 2))
             except Exception:
                 pass
             _full_flat(st, "失血熔断", block_rebuild=True)
