@@ -180,14 +180,18 @@ def _do_rebalance(st, imbalance, target, _start_new_round=False):
 
     # 已有批次在进行：检查批间间隔是否到 → 执行下一批
     if cur_batch < batches and (now - batch_start_ts) >= gap_min * 60:
-        r = rebalance_batch(heavy, per_batch, use_limit=True)
+        # 超时转市价判断：距上次批次已超 timeout 且开关开启 → 上一批限价单未成交 → 转市价兜底
+        market_now = (getattr(st, "rebalance_market_after_timeout", True)
+                      and (now - batch_start_ts) >= timeout_min * 60)
+        r = rebalance_batch(heavy, per_batch, use_limit=not market_now)
         if r.get("status") != "ok":
             return
         st._rebalance_cur_batch = cur_batch + 1
         st._rebalance_batch_ts = now
         st.last_rebalance_ts = now
-        _log(st, f"🔄 [回补] 批{cur_batch+1}/{batches} 双向对开 平{heavy}{per_batch}+开轻仓{per_batch} (限价)",
-             cat="REBAL", data={"batch": cur_batch + 1, "total": batches, "per": per_batch, "heavy": heavy})
+        _mode = "市价" if market_now else "限价"
+        _log(st, f"🔄 [回补] 批{cur_batch+1}/{batches} 双向对开 平{heavy}{per_batch}+开轻仓{per_batch} ({_mode})",
+             cat="REBAL", data={"batch": cur_batch + 1, "total": batches, "per": per_batch, "heavy": heavy, "mode": _mode})
         save_state_lazy(st)
         return
 

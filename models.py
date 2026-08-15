@@ -91,6 +91,7 @@ class GridState:
     rebalance_batches: int = 2              # 回补批数（滑块2~3，默认2）
     rebalance_batch_gap_min: float = 20.0   # 批间间隔（分钟，滑块5/15/30，默认20）
     rebalance_limit_timeout_min: float = 10.0  # 限价超时未成交转市价（分钟，默认10）
+    rebalance_market_after_timeout: bool = True  # 勾选=限价超时转市价；不勾选=只挂限价不转市价
     # 风控
     safety_factor: float = 0.7
     shrink_pct: float = 10.0
@@ -303,6 +304,7 @@ class GridState:
                 "rebalance_batches": self.rebalance_batches,
                 "rebalance_batch_gap_min": self.rebalance_batch_gap_min,
                 "rebalance_limit_timeout_min": self.rebalance_limit_timeout_min,
+                "rebalance_market_after_timeout": self.rebalance_market_after_timeout,
                 "price_offset_pct": self.price_offset_pct,
                 "adjust_split_ratio": self.adjust_split_ratio,
                 "data_loop_interval": self.data_loop_interval,
