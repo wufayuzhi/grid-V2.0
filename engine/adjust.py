@@ -227,38 +227,6 @@ def save_state_lazy(st):
         pass
 
 
-def _check_cumulative_drawdown(st) -> bool:
-    """累计回撤兜底：高水位峰值upl回撤 > 阈值 → 全平 + 禁重建。慢速阴跌防线。
-
-    累计回撤 = (峰值upl − 最新upl) ÷ (账户权益 − 累计追加本金) × 100%（高水位）
-    peak_upl 由 tick 层每轮更新（max 高水位）；建仓/全平后重置。
-    """
-    if not getattr(st, "use_cumulative_drawdown_flat", True):
-        return False
-    try:
-        from formulas.drawdown import calc_cumulative_drawdown_pct
-        pos = st.position
-        latest_upl = (pos.long_unrealized_pnl or 0) + (pos.short_unrealized_pnl or 0)
-        dd = calc_cumulative_drawdown_pct(
-            st.peak_upl, latest_upl, st.total_equity, st.cumulative_added)
-        if dd > st.cumulative_drawdown_threshold:
-            _log(st, f"📉 [累计回撤] 高水位回撤 {dd:.2f}% > 阈值{st.cumulative_drawdown_threshold:.1f}% "
-                     f"(峰值upl={st.peak_upl:.2f}, 当前upl={latest_upl:.2f}) → 熔断",
-                 level="WARN", cat="RISK",
-                 data={"drawdown_pct": round(dd, 2), "peak_upl": round(st.peak_upl, 2),
-                       "latest_upl": round(latest_upl, 2)})
-            _full_flat(st, "累计回撤熔断", block_rebuild=True)
-            return True
-        elif dd > 0.7 * st.cumulative_drawdown_threshold:
-            try:
-                from notify import on_risk_close
-                on_risk_close(f"回撤{dd:.2f}% 接近{st.cumulative_drawdown_threshold:.1f}%累计线",
-                              round(st.total_equity or 0, 2))
-            except Exception:
-                pass
-    except Exception as e:
-        logger.debug(f"cumulative_drawdown: {e}")
-    return False
 
 
 def _check_safety_flat(st) -> bool:

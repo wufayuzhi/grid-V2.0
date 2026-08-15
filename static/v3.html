@@ -1088,12 +1088,8 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
           <div class="pm-note">预警区每次缩仓的百分比（哪边重缩哪边）</div>
           <div class="pm-div"></div>
           <div class="sw-row"><label><input type="checkbox" id="mod-use_bleed_melt" checked onchange="onModBoolChange('use_bleed_melt',this)"> 失血熔断全平（5秒窗口回撤）</label></div>
-          <div class="sw-row"><label><input type="checkbox" id="mod-use_cumulative_drawdown_flat" checked onchange="onModBoolChange('use_cumulative_drawdown_flat',this)"> 累计回撤全平（高水位阴跌兜底）</label></div>
           <div class="sw-row"><label><input type="checkbox" id="mod-use_safety_flat" checked onchange="onModBoolChange('use_safety_flat',this)"> 安全距离全平（强平空间兜底）</label></div>
           <div class="pm-div"></div>
-          <div class="sl-row"><span>累计回撤阈值%</span><span class="sl-val" id="sl-cumulative_drawdown_threshold">5</span></div>
-          <input type="range" class="mod-slider" id="mod-cumulative_drawdown_threshold" min="3" max="15" step="1" value="5" oninput="onModChange('cumulative_drawdown_threshold',this)">
-          <div class="pm-note">高水位峰值upl回撤 ≥ 此% 时全平（慢速阴跌兜底）</div>
           <div class="sl-row"><span>安全距离全平阈值%</span><span class="sl-val" id="sl-safety_flat_threshold">5</span></div>
           <input type="range" class="mod-slider" id="mod-safety_flat_threshold" min="3" max="10" step="1" value="5" oninput="onModChange('safety_flat_threshold',this)">
           <div class="pm-note">安全距离 < 此% 时全平（强平风险兜底）</div>
@@ -2075,7 +2071,6 @@ async function refresh() {
         ['mod-density_min','density_min'],
         ['mod-atr_period','atr_period'],
         // 风控强度组
-        ['mod-cumulative_drawdown_threshold','cumulative_drawdown_threshold'],
         ['mod-safety_flat_threshold','safety_flat_threshold'],
         // 失衡监控组
         ['mod-one_way_threshold','one_way_threshold'],
@@ -2109,7 +2104,7 @@ async function refresh() {
     if (txtReb) txtReb.textContent = rebOn ? '开' : '关';
 
     // ── 风控三保险 checkbox 开关状态同步（失血/累计回撤/安全距离）──
-    ['use_bleed_melt', 'use_cumulative_drawdown_flat', 'use_safety_flat'].forEach((k) => {
+    ['use_bleed_melt', 'use_safety_flat'].forEach((k) => {
       const cb = document.getElementById('mod-' + k);
       if (cb && S.params && S.params[k] !== undefined) cb.checked = !!S.params[k];
     });
@@ -3205,10 +3200,9 @@ function updateStatusLights(p, S) {
 
   // 风控启用：蓝=未运行，绿=运行，累计回撤≥阈值 或 安全距离触发→红
   const flat = (S.flat_reason || '').toString();
-  const drawdownTrig = (p.peak_upl || 0) >= (p.cumulative_drawdown_threshold || 5);
   const safetyTrig = /安全距离|回撤|兜底/.test(flat) || !!p.auto_rebuild_blocked;
   const riskEnabled = p.use_risk_control !== false;
-  setDot('sw-risk-dot', !running || !riskEnabled ? 'blue' : (drawdownTrig || safetyTrig ? 'red' : 'green'));
+  setDot('sw-risk-dot', !running || !riskEnabled ? 'blue' : (safetyTrig ? 'red' : 'green'));
   const risk = document.getElementById('sw-risk-val');
   if (risk) risk.textContent = p.safety_factor ?? '—';
   const riskTgl = document.getElementById('sw-risk-tgl');
@@ -3387,7 +3381,7 @@ function onSTChange() {
 const PM_KEYS = {
   grid: ['base_density','density_min','atr_timeframe','atr_period','adj_ratio'],
   risk: ['safety_factor','shrink_pct',
-         'cumulative_drawdown_threshold','safety_flat_threshold'],
+         'safety_flat_threshold'],
   imb:  ['imbalance_threshold_pct','rebalance_target_pct','oi_spike_pct','oi_drop_pct','oi_lock_base',
          'one_way_threshold','confirm_time','exit_buffer','debounce_loss_line','debounce_profit_line',
          'lr1','lr2','lr3','lr4','lr5','ld1','ld2','ld3','ld4','ld5'],
@@ -3398,7 +3392,7 @@ const PM_KEYS = {
 };
 const PM_MAP = {
   grid: { fm: 'pm-fm-grid_spacing', sliders: [['mod-base_density','sl-base_density','base_density'],['mod-density_min','sl-density_min','density_min'],['mod-atr_timeframe','sl-atr_timeframe','atr_timeframe'],['mod-atr_period','sl-atr_period','atr_period']] },
-  risk: { fm: 'pm-fm-effective_params', sliders: [['mod-safety_factor','sl-safety_factor','safety_factor'],['mod-shrink_pct','sl-shrink_pct','shrink_pct'],['mod-cumulative_drawdown_threshold','sl-cumulative_drawdown_threshold','cumulative_drawdown_threshold'],['mod-safety_flat_threshold','sl-safety_flat_threshold','safety_flat_threshold']] },
+  risk: { fm: 'pm-fm-effective_params', sliders: [['mod-safety_factor','sl-safety_factor','safety_factor'],['mod-shrink_pct','sl-shrink_pct','shrink_pct'],['mod-safety_flat_threshold','sl-safety_flat_threshold','safety_flat_threshold']] },
   imb:  { fm: '', sliders: [['mod-imbalance_threshold_pct','sl-imbalance_threshold_pct','imbalance_threshold_pct'],['mod-rebalance_target_pct','sl-rebalance_target_pct','rebalance_target_pct'],['mod-rebalance_batches','sl-rebalance_batches','rebalance_batches'],['mod-rebalance_batch_gap_min','sl-rebalance_batch_gap_min','rebalance_batch_gap_min'],['mod-rebalance_limit_timeout_min','sl-rebalance_limit_timeout_min','rebalance_limit_timeout_min'],['mod-oi_spike_pct','sl-oi_spike_pct','oi_spike_pct'],['mod-oi_drop_pct','sl-oi_drop_pct','oi_drop_pct'],['mod-oi_lock_base','sl-oi_lock_base','oi_lock_base'],['mod-one_way_threshold','sl-one_way_threshold','one_way_threshold'],['mod-confirm_time','sl-confirm_time','confirm_time'],['mod-exit_buffer','sl-exit_buffer','exit_buffer'],['mod-debounce_loss_line','sl-debounce_loss_line','debounce_loss_line'],['mod-debounce_profit_line','sl-debounce_profit_line','debounce_profit_line']] },
   ice:  { fm: 'pm-fm-iceberg', sliders: [['mod-iceberg_sz','sl-iceberg_sz','iceberg_sz'],['mod-pxVar','sl-pxVar','pxVar']] },
   bleed:{ fm: '', sliders: [['mod-bleed_threshold_pct','sl-bleed_threshold_pct','bleed_threshold_pct'],['mod-bleed_window_sec','sl-bleed_window_sec','bleed_window_sec'],['mod-equity_history_window_sec','sl-equity_history_window_sec','equity_history_window_sec']] },

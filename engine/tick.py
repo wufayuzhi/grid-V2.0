@@ -122,11 +122,6 @@ def _trigger_decision():
         p.long_contracts, p.short_contracts,
         p.long_liq_px, p.short_liq_px, p.mark_px), 2)
 
-    # 高水位净浮盈 peak_upl 更新（累计回撤兜底用）：取 自上次全平/重建起的最高净浮盈
-    _latest_upl = (p.long_unrealized_pnl or 0) + (p.short_unrealized_pnl or 0)
-    if _latest_upl > st.peak_upl:
-        st.peak_upl = _latest_upl
-
     # 权益记录（失血熔断滑动窗口用）
     record = getattr(st, "record_equity", None)
     if callable(record):

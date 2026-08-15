@@ -114,7 +114,6 @@ class GridState:
     use_iceberg: bool = True
     use_risk_control: bool = True
     use_bleed_melt: bool = True
-    use_cumulative_drawdown_flat: bool = True   # 累计回撤全平保险开关(2026-08-15新增,默认开)
     use_safety_flat: bool = True                # 安全距离全平保险开关(2026-08-15新增,默认开)
     use_dynamic_params: bool = True
     # 失衡回补(B)开关：默认关=以A(挂单调价格/单边防堆仓)为主，失衡靠盈亏平衡点抬升渐进化解；
@@ -142,10 +141,8 @@ class GridState:
     # 统一口径
     cumulative_added: float = 0.0      # 累计追加本金（失血/累计回撤/防抖线分母剔除）
 
-    # ── 批次2：三条全平防线（统一优先级裁决链 2026-08-06 定稿）──
-    cumulative_drawdown_threshold: float = 5.0  # 累计回撤阈值%(滑块3~15)
+    # ── 全平防线（统一优先级裁决链）──
     safety_flat_threshold: float = 5.0          # 安全距离全平阈值%(滑块3~10)
-    peak_upl: float = 0.0                       # 高水位净浮盈(自上次全平/重建起的最高净浮盈)
     auto_rebuild_blocked: bool = False          # 熔断类全平后禁止自动重建(人工grid/start重置)
     flat_reason: str = ""                       # 最近一次全平原因(止盈/失血/累计回撤/安全距离/手动)
     flat_ts: float = 0.0                        # 最近一次全平时间戳
@@ -352,9 +349,7 @@ class GridState:
                 "emergency_state": getattr(self, "emergency_state", None),
                 "heavy_side": getattr(self, "heavy_side", None),
                 "heavy_state": getattr(self, "heavy_state", None),
-                "cumulative_drawdown_threshold": self.cumulative_drawdown_threshold,
                 "safety_flat_threshold": self.safety_flat_threshold,
-                "peak_upl": round(self.peak_upl, 2),
                 "auto_rebuild_blocked": self.auto_rebuild_blocked,
                 "flat_reason": self.flat_reason,
                 "flat_ts": self.flat_ts,

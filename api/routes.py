@@ -263,7 +263,6 @@ def _state_dict(st):
         "use_iceberg": getattr(st, "use_iceberg", True),
         "use_risk_control": getattr(st, "use_risk_control", True),
         "use_bleed_melt": getattr(st, "use_bleed_melt", True),
-        "use_cumulative_drawdown_flat": getattr(st, "use_cumulative_drawdown_flat", True),
         "use_safety_flat": getattr(st, "use_safety_flat", True),
         "safety_factor": getattr(st, "safety_factor", 0.7),
         "shrink_pct": getattr(st, "shrink_pct", 10.0),
@@ -1675,7 +1674,7 @@ def register_routes(app: FastAPI):
         for k in ["capital", "reserved_capital", "leverage", "imbalance_threshold",
                   "imbalance_threshold_pct",
                   "iceberg_sz", "pxVar", "auto_adjust", "grid_auto_run", "use_iceberg",
-                  "use_risk_control", "use_bleed_melt", "use_cumulative_drawdown_flat",
+                  "use_risk_control", "use_bleed_melt",
                   "use_safety_flat", "use_rebalance",
                   "safety_factor", "shrink_pct", "oi_spike_pct", "oi_drop_pct",
                   "oi_lock_base", "bleed_threshold_pct",
@@ -1690,7 +1689,7 @@ def register_routes(app: FastAPI):
                   "one_way_threshold", "ladder_rates", "ladder_gap_up", "ladder_gap_dn", "ladder_enabled",
                   "confirm_time", "exit_buffer", "debounce_loss_line",
                   "debounce_profit_line", "atr_timeframe", "atr_period", "density_min",
-                  "cumulative_drawdown_threshold", "safety_flat_threshold",
+                  "safety_flat_threshold",
                   "trend_tf", "ema_fast", "ema_slow", "st_period", "st_mult",
                   "oi_n"]:
             if k in req:

@@ -106,9 +106,7 @@ def save_state():
         "atr_period": st.atr_period,
         "density_min": st.density_min,
         "cumulative_added": st.cumulative_added,
-        "cumulative_drawdown_threshold": st.cumulative_drawdown_threshold,
         "safety_flat_threshold": st.safety_flat_threshold,
-        "peak_upl": st.peak_upl,
         "auto_rebuild_blocked": st.auto_rebuild_blocked,
         "flat_reason": st.flat_reason,
         "flat_ts": st.flat_ts,
@@ -129,7 +127,6 @@ def save_state():
         "use_iceberg": st.use_iceberg,
         "use_risk_control": st.use_risk_control,
         "use_bleed_melt": st.use_bleed_melt,
-        "use_cumulative_drawdown_flat": st.use_cumulative_drawdown_flat,
         "use_safety_flat": st.use_safety_flat,
         "use_dynamic_params": st.use_dynamic_params,
         "coin_amplitude_24h": st.coin_amplitude_24h,
@@ -263,9 +260,7 @@ def load_state() -> GridState:
         st.atr_period = data.get("atr_period", 24)
         st.density_min = data.get("density_min", 0.3)
         st.cumulative_added = data.get("cumulative_added", 0.0)
-        st.cumulative_drawdown_threshold = data.get("cumulative_drawdown_threshold", 5.0)
         st.safety_flat_threshold = data.get("safety_flat_threshold", 5.0)
-        st.peak_upl = data.get("peak_upl", 0.0)
         st.auto_rebuild_blocked = data.get("auto_rebuild_blocked", False)
         st.flat_reason = data.get("flat_reason", "")
         st.flat_ts = data.get("flat_ts", 0.0)
@@ -286,7 +281,6 @@ def load_state() -> GridState:
         st.use_iceberg = data.get("use_iceberg", True)
         st.use_risk_control = data.get("use_risk_control", True)
         st.use_bleed_melt = data.get("use_bleed_melt", True)
-        st.use_cumulative_drawdown_flat = data.get("use_cumulative_drawdown_flat", True)
         st.use_safety_flat = data.get("use_safety_flat", True)
         st.use_dynamic_params = data.get("use_dynamic_params", True)
         st.coin_amplitude_24h = data.get("coin_amplitude_24h", 0)
