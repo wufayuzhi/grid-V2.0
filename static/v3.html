@@ -1134,21 +1134,21 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
           <input type="range" class="mod-slider" id="mod-one_way_threshold" min="30" max="90" step="1" value="60" oninput="onModChange('one_way_threshold',this)">
           <div class="pm-note">失衡 ≥ 此% 时只平重仓侧（单向成交+紧急拆墙唯一开关）</div>
           <div class="pm-div"></div>
-          <div class="pm-sub">档位表（收网手填价差，2026-08-15重构）<span style="font-weight:400;color:var(--t3)">☑勾选=启用该档；上端价差=累加重仓侧挂远，下端价差=化解重仓侧挂近，强制≥0.3%</span></div>
+          <div class="pm-sub">档位表（收网手填价差，2026-08-16重构）<span style="font-weight:400;color:var(--t3)">☑勾选=启用该档；重仓侧价差=挂远少成交，轻仓侧价差=挂近加速成交，强制≥0.3%；引擎按当前多空谁重自动套到对应侧</span></div>
           <datalist id="ladder-dens-list">
             <option value="0.3"></option><option value="0.5"></option><option value="0.75"></option>
             <option value="1.0"></option><option value="1.4"></option><option value="2.0"></option>
             <option value="2.5"></option><option value="3.0"></option>
           </datalist>
-          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en1" onchange="toggleLadderEnabled(0,this)" style="width:auto"><span>档1失衡率%</span><span class="sl-val" id="sl-lr1">40</span><span style="margin-left:8px">上端%</span><input id="mod-lgu1" onchange="onLadderGapUp(0,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"><span style="margin-left:8px">下端%</span><input id="mod-ldn1" onchange="onLadderGapDn(0,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
+          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en1" onchange="toggleLadderEnabled(0,this)" style="width:auto"><span>档1失衡率%</span><span class="sl-val" id="sl-lr1">40</span><span style="margin-left:8px">重仓侧%</span><input id="mod-lgu1" onchange="onLadderGapUp(0,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"><span style="margin-left:8px">轻仓侧%</span><input id="mod-ldn1" onchange="onLadderGapDn(0,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
           <input type="range" class="mod-slider" id="mod-lr1" min="0" max="100" step="1" value="40" oninput="onLadderRateChange(0,this)">
-          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en2" onchange="toggleLadderEnabled(1,this)" style="width:auto"><span>档2失衡率%</span><span class="sl-val" id="sl-lr2">50</span><span style="margin-left:8px">上端%</span><input id="mod-lgu2" onchange="onLadderGapUp(1,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"><span style="margin-left:8px">下端%</span><input id="mod-ldn2" onchange="onLadderGapDn(1,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
+          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en2" onchange="toggleLadderEnabled(1,this)" style="width:auto"><span>档2失衡率%</span><span class="sl-val" id="sl-lr2">50</span><span style="margin-left:8px">重仓侧%</span><input id="mod-lgu2" onchange="onLadderGapUp(1,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"><span style="margin-left:8px">轻仓侧%</span><input id="mod-ldn2" onchange="onLadderGapDn(1,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
           <input type="range" class="mod-slider" id="mod-lr2" min="0" max="100" step="1" value="50" oninput="onLadderRateChange(1,this)">
-          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en3" onchange="toggleLadderEnabled(2,this)" style="width:auto"><span>档3失衡率%</span><span class="sl-val" id="sl-lr3">60</span><span style="margin-left:8px">上端%</span><input id="mod-lgu3" onchange="onLadderGapUp(2,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"><span style="margin-left:8px">下端%</span><input id="mod-ldn3" onchange="onLadderGapDn(2,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
+          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en3" onchange="toggleLadderEnabled(2,this)" style="width:auto"><span>档3失衡率%</span><span class="sl-val" id="sl-lr3">60</span><span style="margin-left:8px">重仓侧%</span><input id="mod-lgu3" onchange="onLadderGapUp(2,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"><span style="margin-left:8px">轻仓侧%</span><input id="mod-ldn3" onchange="onLadderGapDn(2,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
           <input type="range" class="mod-slider" id="mod-lr3" min="0" max="100" step="1" value="60" oninput="onLadderRateChange(2,this)">
-          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en4" onchange="toggleLadderEnabled(3,this)" style="width:auto"><span>档4失衡率%</span><span class="sl-val" id="sl-lr4">70</span><span style="margin-left:8px">上端%</span><input id="mod-lgu4" onchange="onLadderGapUp(3,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"><span style="margin-left:8px">下端%</span><input id="mod-ldn4" onchange="onLadderGapDn(3,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
+          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en4" onchange="toggleLadderEnabled(3,this)" style="width:auto"><span>档4失衡率%</span><span class="sl-val" id="sl-lr4">70</span><span style="margin-left:8px">重仓侧%</span><input id="mod-lgu4" onchange="onLadderGapUp(3,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"><span style="margin-left:8px">轻仓侧%</span><input id="mod-ldn4" onchange="onLadderGapDn(3,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
           <input type="range" class="mod-slider" id="mod-lr4" min="0" max="100" step="1" value="70" oninput="onLadderRateChange(3,this)">
-          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en5" onchange="toggleLadderEnabled(4,this)" style="width:auto"><span>档5失衡率%</span><span class="sl-val" id="sl-lr5">80</span><span style="margin-left:8px">上端%</span><input id="mod-lgu5" onchange="onLadderGapUp(4,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"><span style="margin-left:8px">下端%</span><input id="mod-ldn5" onchange="onLadderGapDn(4,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
+          <div class="sl-row"><input type="checkbox" class="mod-ladder-en" id="mod-lr-en5" onchange="toggleLadderEnabled(4,this)" style="width:auto"><span>档5失衡率%</span><span class="sl-val" id="sl-lr5">80</span><span style="margin-left:8px">重仓侧%</span><input id="mod-lgu5" onchange="onLadderGapUp(4,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"><span style="margin-left:8px">轻仓侧%</span><input id="mod-ldn5" onchange="onLadderGapDn(4,this)" style="width:56px;padding:3px;border:1px solid var(--bd);border-radius:4px"></div>
           <input type="range" class="mod-slider" id="mod-lr5" min="0" max="100" step="1" value="80" oninput="onLadderRateChange(4,this)">
           <div class="sl-row"><span>确认时间T(s)</span><span class="sl-val" id="sl-confirm_time">30</span></div>
           <input type="range" class="mod-slider" id="mod-confirm_time" min="10" max="120" step="1" value="30" oninput="onModChange('confirm_time',this)">
@@ -3157,14 +3157,14 @@ function onLadderRateChange(idx, el) {
   if (lbl) lbl.textContent = el.value;
   _pendingChanges.ladder_rates = rates;
 }
-// 档位上端价差输入（累加重仓侧挂远）→ 更新 ladder_gap_up 数组
+// 档位重仓侧价差输入（挂远少成交）→ 更新 ladder_gap_up 数组
 function onLadderGapUp(idx, el) {
   const gup = (S.params.ladder_gap_up || [2.0, 1.5, 1.2, 1.0, 0.8]).slice();
   const v = parseFloat(el.value);
   if (!isNaN(v) && v >= 0) gup[idx] = v;
   _pendingChanges.ladder_gap_up = gup;
 }
-// 档位下端价差输入（化解重仓侧挂近）→ 更新 ladder_gap_dn 数组
+// 档位轻仓侧价差输入（挂近加速成交）→ 更新 ladder_gap_dn 数组
 function onLadderGapDn(idx, el) {
   const gdn = (S.params.ladder_gap_dn || [1.0, 0.8, 0.7, 0.5, 0.4]).slice();
   const v = parseFloat(el.value);
@@ -3602,18 +3602,23 @@ function updatePMResult(kind) {
     h += _pmRow('每批', bt > 0 ? (rebalQty / bt).toFixed(1) + ' 张' : '—');
     h += _pmRow('回补后仓位', '多' + afterLong.toFixed(1) + ' / 空' + afterShort.toFixed(1), true);
     h += _pmRow('回补后失衡', afterImb.toFixed(1) + '%');
-    // 当前档位预览（与后端 _ladder_gap 同源：失衡≥档位阈值→命中该档上下端价差）
+    // 当前档位预览（与后端 _ladder_gap 同源：失衡≥档位阈值→命中该档重/轻侧价差）
     const rates = (S.params && S.params.ladder_rates) || [40, 50, 60, 70, 80];
-    const gupA = (S.params && S.params.ladder_gap_up) || [2.0, 1.5, 1.2, 1.0, 0.8];
-    const gdnA = (S.params && S.params.ladder_gap_dn) || [1.0, 0.8, 0.7, 0.5, 0.4];
+    const gupA = (S.params && S.params.ladder_gap_up) || [2.0, 1.5, 1.2, 1.0, 0.8];   // 重仓侧价差
+    const gdnA = (S.params && S.params.ladder_gap_dn) || [1.0, 0.8, 0.7, 0.5, 0.4];   // 轻仓侧价差
     const enA = (S.params && S.params.ladder_enabled) || [true, true, true, true, true];
     let hitIdx = -1;
     for (let i = 0; i < rates.length; i++) if (enA[i] && imb >= rates[i]) hitIdx = i;
     if (hitIdx >= 0) {
-      const upG = Math.max(gupA[hitIdx], 0.3), dnG = Math.max(gdnA[hitIdx], 0.3);
+      // 重/轻侧映射：与后端 _ladder_gap 一致（重仓多→重仓侧在上，重仓空→重仓侧在下）
+      const isLongHeavy = lc >= sc;
+      const heavyG = Math.max(gupA[hitIdx], 0.3), lightG = Math.max(gdnA[hitIdx], 0.3);
+      const upG = isLongHeavy ? heavyG : lightG;   // 上端挂单价差
+      const dnG = isLongHeavy ? lightG : heavyG;   // 下端挂单价差
       const anc = S.grid_anchor_px > 0 ? S.grid_anchor_px : ((lAvg > 0 || sAvg > 0) ? ((lAvg + sAvg) / 2 || mark) : mark);
       h += _pmRow('当前档位', '档' + (hitIdx + 1) + '（失衡≥' + rates[hitIdx] + '%）', true);
-      h += _pmRow('档位价差', '上' + upG.toFixed(1) + '% / 下' + dnG.toFixed(1) + '%');
+      h += _pmRow('档位价差', '重仓' + heavyG.toFixed(1) + '% / 轻仓' + lightG.toFixed(1) + '%');
+      h += _pmRow('当前重仓', (isLongHeavy ? '多头' : '空头') + '（' + (isLongHeavy ? lc : sc) + '张）');
       if (anc > 0) {
         h += _pmRow('上端挂单价', (anc * (1 + upG / 100)).toFixed(6), true);
         h += _pmRow('下端挂单价', (anc * (1 - dnG / 100)).toFixed(6), true);

@@ -269,25 +269,40 @@ def _mode_base_density(st) -> float:
 
 
 def _ladder_gap(st, imbalance) -> tuple:
-    """档位手填价差（上端, 下端）：取失衡率对应档（≥该档取该档价差），未达档位取 None。
+    """档位手填价差（重仓侧, 轻仓侧）→ 按当前重仓侧映射为 (上端, 下端)。
 
-    2026-08-15 重构：原 ladder_densities(密度) 删掉，改为手填价差 gap_up/gap_dn。
-    返回 (up_gap, dn_gap)，两者为百分比；未达任一档位返回 (None, None)。
+    2026-08-16 重构：档位表两列从「上端/下端」改为「重仓侧/轻仓侧」。
+      ladder_gap_up  = 重仓侧价差（尽量少成交，挂远）
+      ladder_gap_dn  = 轻仓侧价差（加速成交，挂近）
+    返回 (up_gap, dn_gap) 为按当前持仓映射后的上/下端百分比；未达任一档位返回 (None, None)。
+
+    映射规则（重仓侧决定挂单方向）：
+      重仓=空头(多<空) → 重仓侧挂单在下方(开多平空) → 重仓价差→下端, 轻仓价差→上端
+      重仓=多头(多>空) → 重仓侧挂单在上方(开空平多) → 重仓价差→上端, 轻仓价差→下端
     """
     rates = list(getattr(st, "ladder_rates", [40, 50, 60, 70, 80]) or [40, 50, 60, 70, 80])
-    gup = list(getattr(st, "ladder_gap_up", [2.0, 1.5, 1.2, 1.0, 0.8]) or [2.0, 1.5, 1.2, 1.0, 0.8])
-    gdn = list(getattr(st, "ladder_gap_dn", [1.0, 0.8, 0.7, 0.5, 0.4]) or [1.0, 0.8, 0.7, 0.5, 0.4])
+    gheavy = list(getattr(st, "ladder_gap_up", [2.0, 1.5, 1.2, 1.0, 0.8]) or [2.0, 1.5, 1.2, 1.0, 0.8])
+    glight = list(getattr(st, "ladder_gap_dn", [1.0, 0.8, 0.7, 0.5, 0.4]) or [1.0, 0.8, 0.7, 0.5, 0.4])
     enabled = list(getattr(st, "ladder_enabled", [True, True, True, True, True]) or [True, True, True, True, True])
-    up = dn = None
+    heavy_gap = light_gap = None
     for i, r in enumerate(rates):
         if i >= len(enabled) or not enabled[i]:
             continue
         if imbalance >= r:
-            if i < len(gup):
-                up = float(gup[i])
-            if i < len(gdn):
-                dn = float(gdn[i])
-    return up, dn
+            if i < len(gheavy):
+                heavy_gap = float(gheavy[i])
+            if i < len(glight):
+                light_gap = float(glight[i])
+    if heavy_gap is None and light_gap is None:
+        return None, None
+    # 按当前重仓侧映射到上/下端
+    heavy, _ = _heavy_side(st)
+    if heavy == "long":
+        # 重仓多 → 重仓侧(开空平多)在上方，轻仓侧在下方
+        return heavy_gap, light_gap
+    else:
+        # 重仓空(或平手) → 重仓侧(开多平空)在下方，轻仓侧在上方
+        return light_gap, heavy_gap
 
 
 def _ladder_density(st, imbalance) -> float:
