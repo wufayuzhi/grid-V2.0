@@ -285,10 +285,20 @@ def _ladder_state(st, imbalance: float) -> int:
 
     rates = list(getattr(st, "ladder_rates", [40, 50, 60, 70, 80]) or [40, 50, 60, 70, 80])
     enabled = list(getattr(st, "ladder_enabled", [True, True, True, True, True]) or [True, True, True, True, True])
-    # 当前失衡对应的最高启用档位索引（逐层进）
+    # 当前失衡对应的【启用档中阈值≤失衡的最高档位值】对应的档位索引（逐层进）。
+    # 按档位值升序排序后，取最后一个满足 enabled 且 threshold<=imbalance 的档。
+    # 修复：直接遍历时档位乱序(如档5=0<档4)会选错档；改按阈值取最大满足档。
     cur_tier = -1
+    best_threshold = -1.0
     for i, r in enumerate(rates):
-        if i < len(enabled) and enabled[i] and imbalance >= r:
+        if i >= len(enabled) or not enabled[i]:
+            continue
+        try:
+            tr = float(r)
+        except (TypeError, ValueError):
+            continue
+        if tr > 0 and imbalance >= tr and tr >= best_threshold:
+            best_threshold = tr
             cur_tier = i
 
     cur_tier_s = getattr(st, "_ladder_tier", -1)
@@ -327,31 +337,27 @@ def _ladder_gap(st, imbalance) -> tuple:
     2026-08-16 重构：档位表两列从「上端/下端」改为「重仓侧/轻仓侧」。
       ladder_gap_up  = 重仓侧价差（尽量少成交，挂远）
       ladder_gap_dn  = 轻仓侧价差（加速成交，挂近）
-    2026-08-16 批次C：接入收网状态机(_ladder_state)。仅 net 状态返回收网价差；
-      off/cooldown 状态返回 (None, None) → 走正常网格。
-    返回 (up_gap, dn_gap) 为按当前持仓映射后的上/下端百分比；非收网态返回 (None, None)。
+    2026-08-16 批次C2 修复：改用 _ladder_state 返回的【已确认档位 tier】取价差，
+      不再用 imbalance>=r 独立重算。修复三处不一致：
+       ① 防抖与价差脱节（升/退档防抖期内价差不再提前跳档）
+       ② 15%~20%区间状态与价差打架（tier<0 统一走正常网格）
+       ③ 档位乱序/设0时选错档（按 tier 直接定位，不依赖数组排序）
+    tier<0（未收网/冷静期）→ 返回 (None, None) 走正常网格。
+    返回 (up_gap, dn_gap) 为按当前持仓映射后的上/下端百分比。
 
     映射规则（重仓侧决定挂单方向）：
       重仓=空头(多<空) → 重仓侧挂单在下方(开多平空) → 重仓价差→下端, 轻仓价差→上端
       重仓=多头(多>空) → 重仓侧挂单在上方(开空平多) → 重仓价差→上端, 轻仓价差→下端
     """
-    if _ladder_state(st, imbalance) < 0:
+    tier = _ladder_state(st, imbalance)
+    if tier < 0:
         return None, None
-    rates = list(getattr(st, "ladder_rates", [40, 50, 60, 70, 80]) or [40, 50, 60, 70, 80])
     gheavy = list(getattr(st, "ladder_gap_up", [2.0, 1.5, 1.2, 1.0, 0.8]) or [2.0, 1.5, 1.2, 1.0, 0.8])
     glight = list(getattr(st, "ladder_gap_dn", [1.0, 0.8, 0.7, 0.5, 0.4]) or [1.0, 0.8, 0.7, 0.5, 0.4])
-    enabled = list(getattr(st, "ladder_enabled", [True, True, True, True, True]) or [True, True, True, True, True])
-    heavy_gap = light_gap = None
-    for i, r in enumerate(rates):
-        if i >= len(enabled) or not enabled[i]:
-            continue
-        if imbalance >= r:
-            if i < len(gheavy):
-                heavy_gap = float(gheavy[i])
-            if i < len(glight):
-                light_gap = float(glight[i])
-    if heavy_gap is None and light_gap is None:
+    if tier >= len(gheavy) or tier >= len(glight):
         return None, None
+    heavy_gap = float(gheavy[tier])
+    light_gap = float(glight[tier])
     # 按当前重仓侧映射到上/下端
     heavy, _ = _heavy_side(st)
     if heavy == "long":
