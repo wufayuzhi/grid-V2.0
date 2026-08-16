@@ -136,7 +136,7 @@ class GridState:
     # ATR 参数
     atr_timeframe: str = "1H"          # ATR 时间框架（默认1H）
     atr_period: int = 24               # ATR 周期 N
-    density_min: float = 0.3           # 网格密度下限（滑块0.3~1.0；下限=max(设定, 2×费率÷ATR%)）
+    density_min: float = 0.6           # 挂单间隔%下限（2026-08-16 改口径：非密度，是实际挂单间隔%下限；间隔=ATR%×密度，钳制最终间隔≥max(此值, 双向费率)）
     # 统一口径
     cumulative_added: float = 0.0      # 累计追加本金（失血/累计回撤/防抖线分母剔除）
 

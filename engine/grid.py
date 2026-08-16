@@ -538,13 +538,16 @@ def calc_grid_levels(st) -> tuple[float, float]:
             spacing = getattr(st, "target_spacing_pct", 0.6) or 0.6
         if spacing <= 0:
             spacing = 0.6
-        # 网格密度下限钳制（文档§1.1）：密度 ≥ max(滑块设定, 2×费率÷ATR%)
+        # 网格间隔下限钳制（2026-08-16 改口径：density_min 语义=实际挂单间隔%下限，非密度）
+        # 间隔 = ATR% × 密度，要求最终间隔 ≥ max(用户间隔下限, 2×费率) 保证覆盖手续费
         if atr > 0 and anchor > 0:
             atr_pct = atr / anchor * 100
             if atr_pct > 0:
-                fee_pct = 0.001  # 单边费率占位（0.1%）
-                density_floor = max(float(getattr(st, "density_min", 0.3) or 0.3), 2 * fee_pct / atr_pct)
-                density = max(density, density_floor)
+                fee_pct = 0.001  # 单边费率占位（0.1%），双向 2×
+                spacing_min = float(getattr(st, "density_min", 0.3) or 0.3)  # 用户设的间隔下限%
+                spacing_min = max(spacing_min, 2 * fee_pct * 100)  # 至少覆盖双向手续费
+                # 间隔 = atr_pct × density ≥ spacing_min → density ≥ spacing_min / atr_pct
+                density = max(density, spacing_min / atr_pct)
                 spacing = grid_spacing_pct(atr, anchor, density)
         upper = anchor * (1 + spacing / 100)
         lower = anchor * (1 - spacing / 100)

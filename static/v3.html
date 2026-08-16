@@ -1163,9 +1163,9 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
           <div class="sl-row"><span>基础网格密度</span><span class="sl-val" id="sl-base_density">2.0</span></div>
           <input type="range" class="mod-slider" id="mod-base_density" min="0.3" max="4.0" step="0.1" value="2.0" oninput="onModChange('base_density',this)">
           <div class="pm-note">失衡正常时的网格密度（进攻模式base）</div>
-          <div class="sl-row"><span>网格密度下限</span><span class="sl-val" id="sl-density_min">0.3</span></div>
-          <input type="range" class="mod-slider" id="mod-density_min" min="0.3" max="1.0" step="0.1" value="0.3" oninput="onModChange('density_min',this)">
-          <div class="pm-note">密度最低值 = max(此设定, 2×费率÷ATR%)，让间距覆盖手续费</div>
+          <div class="sl-row"><span>挂单间隔下限</span><span class="sl-val" id="sl-density_min">0.6</span></div>
+          <input type="range" class="mod-slider" id="mod-density_min" min="0.3" max="2.0" step="0.1" value="0.6" oninput="onModChange('density_min',this)">
+          <div class="pm-note">实际挂单间隔%下限，间隔=ATR%×密度；保证 ≥此值 且 ≥双向手续费</div>
           <div class="sl-row"><span>调仓比例</span><span class="sl-val" id="sl-adj_ratio">0.06</span></div>
           <input type="range" class="mod-slider" id="mod-adj_ratio" min="0.01" max="0.30" step="0.01" value="0.06" oninput="onModChange('adj_ratio',this)">
           <div class="pm-note">每次网格成交换仓 = 总张数×调仓比例÷2；建议值 = 安全系数×10</div>
@@ -2633,6 +2633,7 @@ async function fetchPrecheck() {
     document.getElementById('ctrl-maxct').textContent = exchMax + ' 张';
     document.getElementById('ctrl-limit').textContent = singleLimit + ' 张';
     document.getElementById('ctrl-safect').textContent = safeOpen + ' 张';
+    window._safeOpen = safeOpen;   // 供网格调仓预览(updatePMResult)无持仓时用安全开仓算调仓量
     document.getElementById('ctrl-adj').textContent = (adj || '—') + (adj ? ' 张' : '');
   } catch (e) { /* 静默 */ }
 }
@@ -3885,9 +3886,10 @@ function updatePMResult(kind) {
     const up = (anchor > 0 && spacing > 0) ? anchor * (1 + spacing / 100) : S.grid_upper_px || 0;
     const dn = (anchor > 0 && spacing > 0) ? anchor * (1 - spacing / 100) : S.grid_lower_px || 0;
     // 调仓量 = max(int(总张数 × 调仓比例 ÷ 2), 1)  （正确公式：总张数的一半）
-    // 有实际持仓用实际持仓；无持仓回退初始建仓总张数（每边 initial_contracts × 2），保证调仓量有参考值
+    // 有实际持仓用实际持仓；无持仓回退当前交易所预检的安全开仓(_safeOpen)，保证调仓量有参考值
     const liveTotal = lC + sC;
-    const initTotal = ((S.params && S.params.initial_contracts) || 0) * 2;
+    const safeOpenBase = window._safeOpen || 0;
+    const initTotal = safeOpenBase * 2;   // 安全开仓每边×2=参考总张数
     const total = liveTotal > 0 ? liveTotal : initTotal;
     const stepN = total > 0 && adj > 0 ? Math.max(Math.floor(total * adj / 2), 1) : 0;
     h = _pmRow('ATR% (近' + (S.atr_period || 24) + '根' + (S.atr_timeframe || '1H') + ')',
