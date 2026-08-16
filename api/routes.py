@@ -964,7 +964,7 @@ def register_routes(app: FastAPI):
                 max_buy = int(float(max_info.get("maxBuy", "0") or "0"))
                 max_sell = int(float(max_info.get("maxSell", "0") or "0"))
                 max_per_side = min(max_buy, max_sell) if max_buy > 0 and max_sell > 0 else max(max_buy, max_sell)
-                result["max_ct"] = max(max_buy, max_sell)
+                result["max_ct"] = max_per_side  # 交易所最大 = 真正能开的单边数(min买/卖)，非单笔上限天花板
                 result["max_per_side"] = max_per_side
                 result["max_detail"] = f"getMaxSize: maxBuy={max_buy}, maxSell={max_sell} → 每边最多{max_per_side}张"
             except Exception as e:

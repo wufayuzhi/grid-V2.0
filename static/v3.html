@@ -2022,13 +2022,14 @@ function diffKlineUpdate(oldData, newData) {
   for (let i = start; i < n; i++) series.update(newData[i]);
 }
 
-async function loadChartData(bar, fit, incremental) {
+async function loadChartData(bar, fit, incremental, instId) {
   if (!series) return;
   const tf = bar || '15m';
   const doFit = fit !== false;   // 默认 true；定时器传 false 保持用户视图
-  const key = (S.inst_id || '') + ':' + tf;
+  const chartInst = instId || S.inst_id;   // 传入则用浏览合约，否则用实际交易合约
+  const key = chartInst + ':' + tf;
   try {
-    let url = `${API_BASE}/api/v1/candles?inst_id=${S.inst_id}&bar=${tf}&limit=200`;
+    let url = `${API_BASE}/api/v1/candles?inst_id=${chartInst}&bar=${tf}&limit=200`;
     // 增量刷新：回退一根时段间距，确保返回当前未收盘K线（ts不变但价格在变）
     if (incremental && lastKlineData && key === lastChartKey) {
       const barMs = { '1m': 60000, '5m': 300000, '15m': 900000, '1H': 3600000, '4H': 14400000, '6H': 21600000, '1D': 86400000 }[tf] || 900000;
@@ -3588,19 +3589,18 @@ async function onInstChange() {
   if (!v.includes('-')) v += '-USDT-SWAP';
   if (v === S.inst_id) return;
   showOverlay('切换行情…');
-  const oldInst = S.inst_id;
-  S.inst_id = v;
-  // 持久化：只保存币名
+  // 仅刷新行情/K线等只读数据（不切换后端合约、不触碰交易模组）
+  // 注意：S.inst_id 保持实际交易合约，行情栏只临时加载 K线/行情，不调 fetchPrecheck/fetchLeverOptions
+  const chartInst = v;
+  // 持久化浏览偏好（只影响下次打开行情栏默认，不影响交易模组）
   localStorage.setItem('last_inst', v.replace('-USDT-SWAP', ''));
   document.getElementById('ctrl-inst').value = v.replace('-USDT-SWAP', '');
-  // 仅刷新行情/K线/预检等只读数据（不切换后端合约）
-  try { await Promise.all([
-    refresh(),
-    loadChartData(),
-    fetchMarketData(v),
-    fetchPrecheck(),
-    fetchLeverOptions()
-  ]); } catch(e) {}
+  try {
+    await Promise.all([
+      loadChartData('', false, false, chartInst),
+      fetchMarketData(chartInst)
+    ]);
+  } catch(e) {}
   hideOverlay();
 }
 
