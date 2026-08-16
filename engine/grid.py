@@ -855,10 +855,11 @@ def check_grid_tick(st) -> None:
         if fill_up_px > 0:
             st.grid_anchor_px = fill_up_px
         st.grid_last_trade_ts = time.time()
-        # 网格滚动次数+1；锁定上端已实现收益 = N×面值×(挂单价upper−多头开仓均价)
+        # 网格滚动次数+1；锁定上端已实现收益 = N×面值×(实际成交价 − 多头开仓均价)（2026-08-16 改用成交价非挂单价）
         st.grid_count = (st.grid_count or 0) + 1
+        _fill_px = fill_up_px if fill_up_px > 0 else (st.grid_upper_px or 0)
         _pnl_up = (_grid_step_contracts(st) * float(st.ct_val or 0)
-                   * (float(st.grid_upper_px or 0) - float(st.position.long_avg_px or 0)))
+                   * (float(_fill_px) - float(st.position.long_avg_px or 0)))
         st.total_pnl = round((st.total_pnl or 0) + _pnl_up, 2)
         st.total_fee = round((st.total_fee or 0) + fees_up, 2)
         _log(st, f"💰 上端成交锁定 {_pnl_up:+.2f}U (网格#{st.grid_count})", cat="GRID")
@@ -892,10 +893,11 @@ def check_grid_tick(st) -> None:
         if fill_lo_px > 0:
             st.grid_anchor_px = fill_lo_px
         st.grid_last_trade_ts = time.time()
-        # 网格滚动次数+1；锁定下端已实现收益 = N×面值×(空头开仓均价−挂单价lower)
+        # 网格滚动次数+1；锁定下端已实现收益 = N×面值×(空头开仓均价 − 实际成交价)（2026-08-16 改用成交价非挂单价）
         st.grid_count = (st.grid_count or 0) + 1
+        _fill_px = fill_lo_px if fill_lo_px > 0 else (st.grid_lower_px or 0)
         _pnl_lo = (_grid_step_contracts(st) * float(st.ct_val or 0)
-                   * (float(st.position.short_avg_px or 0) - float(st.grid_lower_px or 0)))
+                   * (float(st.position.short_avg_px or 0) - float(_fill_px)))
         st.total_pnl = round((st.total_pnl or 0) + _pnl_lo, 2)
         st.total_fee = round((st.total_fee or 0) + fees_lo, 2)
         _log(st, f"💰 下端成交锁定 {_pnl_lo:+.2f}U (网格#{st.grid_count})", cat="GRID")
@@ -966,10 +968,19 @@ def _refresh_grid_display(st) -> None:
             lower = anchor * (1 - _sp_dn / 100)
             _density_disp = _gap_up
         else:
-            # 正常网格：ATR% × base密度（与 calc_grid_levels 完全一致）
+            # 正常网格：ATR% × base密度（与 calc_grid_levels 完全一致，含间隔下限钳制）
             _density_disp = _mode_base_density(st)
             if atr > 0 and anchor > 0:
                 spacing = grid_spacing_pct(atr, anchor, _density_disp)
+                # 网格间隔下限钳制（2026-08-16 改口径，与 calc_grid_levels 完全同源）：
+                # 间隔 = ATR% × 密度，要求最终间隔 ≥ max(用户间隔下限, 双向费率) 保证覆盖手续费
+                atr_pct = atr / anchor * 100
+                if atr_pct > 0:
+                    fee_pct = 0.001  # 单边费率 0.1%
+                    spacing_min = float(getattr(st, "density_min", 0.3) or 0.3)
+                    spacing_min = max(spacing_min, 2 * fee_pct * 100)
+                    _density_disp = max(_density_disp, spacing_min / atr_pct)
+                    spacing = grid_spacing_pct(atr, anchor, _density_disp)
             else:
                 spacing = getattr(st, "target_spacing_pct", 0.6) or 0.6
             upper = anchor * (1 + spacing / 100)

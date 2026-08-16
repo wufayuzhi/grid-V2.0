@@ -522,7 +522,7 @@ def _recalc_formula_details(st):
                     max_info = ac.get_max_size(getattr(st, "inst_id", ""))
                     max_buy = int(float(max_info.get("maxBuy", "0") or "0"))
                     max_sell = int(float(max_info.get("maxSell", "0") or "0"))
-                    max_per_side = min(max_buy, max_sell) if max_buy > 0 and max_sell > 0 else max(max_buy, max_sell)
+                    max_per_side = min(max_buy, max_sell) if max_buy > 0 and max_sell > 0 else 0  # 0侧=不可开，不兜底
                 except Exception:
                     pass
         # 对冲双开：每边张数 = 交易所最大(单边) ÷ 2，资金分给双边
@@ -963,10 +963,21 @@ def register_routes(app: FastAPI):
                 max_info = _auth_client.get_max_size(inst, leverage=lev, px=px)
                 max_buy = int(float(max_info.get("maxBuy", "0") or "0"))
                 max_sell = int(float(max_info.get("maxSell", "0") or "0"))
-                max_per_side = min(max_buy, max_sell) if max_buy > 0 and max_sell > 0 else max(max_buy, max_sell)
-                result["max_ct"] = max_per_side  # 交易所最大 = 真正能开的单边数(min买/卖)，非单笔上限天花板
-                result["max_per_side"] = max_per_side
-                result["max_detail"] = f"getMaxSize: maxBuy={max_buy}, maxSell={max_sell} → 每边最多{max_per_side}张"
+                # 任一侧 ≤ 0（OKX 返回0=该方向当前不可开）→ 判定该方向不可开，不用另一侧兜底（2026-08-16）
+                result["max_buy"] = max_buy
+                result["max_sell"] = max_sell
+                if max_buy > 0 and max_sell > 0:
+                    max_per_side = min(max_buy, max_sell)
+                    result["max_ct"] = max_per_side  # 交易所最大 = 真正能开的单边数(min买/卖)，非单笔上限天花板
+                    result["max_per_side"] = max_per_side
+                    result["max_detail"] = f"getMaxSize: maxBuy={max_buy}, maxSell={max_sell} → 每边最多{max_per_side}张"
+                else:
+                    blocked = "买" if max_buy <= 0 else ("卖" if max_sell <= 0 else "")
+                    max_per_side = 0
+                    result["max_ct"] = 0
+                    result["max_per_side"] = 0
+                    result["max_detail"] = f"getMaxSize: maxBuy={max_buy}, maxSell={max_sell} → {blocked}方向当前不可开"
+                    result["blocked"] = blocked
             except Exception as e:
                 result["error"] = f"查询限额失败: {e}"
                 max_per_side = 1
@@ -1106,7 +1117,7 @@ def register_routes(app: FastAPI):
                     max_info = _auth_client.get_max_size(inst)
                     max_buy = int(float(max_info.get("maxBuy", "0") or "0"))
                     max_sell = int(float(max_info.get("maxSell", "0") or "0"))
-                    exchange_limit = min(max_buy, max_sell) if max_buy > 0 and max_sell > 0 else max(max_buy, max_sell)
+                    exchange_limit = min(max_buy, max_sell) if max_buy > 0 and max_sell > 0 else 0  # 0侧=不可开，不兜底
                     result["exchange_limit"] = exchange_limit
                 except Exception:
                     pass
@@ -1741,7 +1752,7 @@ def register_routes(app: FastAPI):
         #      → 只有"当前失衡率 ≥ 达到该档阈值"才重挂（没达到档位不重挂）
         #   ③ 风控/冰山/失血/其它 → 永不重挂（不影响挂单价）
         grid_direct = {"adj_ratio", "base_density", "defense_density", "density_min",
-                       "atr_timeframe", "atr_period"}
+                       "atr_timeframe", "atr_period", "mode"}  # mode改密度→改挂单价，须重挂(2026-08-16)
         ladder_keys = {"ladder_rates", "ladder_gap_up", "ladder_gap_dn", "one_way_threshold"}
 
         rehang = False
@@ -1793,6 +1804,10 @@ def register_routes(app: FastAPI):
         old_reserved = getattr(st, "reserved_capital", 0.0)
         st.reserved_capital = max(getattr(st, "reserved_capital", 0.0) - amount, 0)
         actual_added = old_reserved - st.reserved_capital
+        # 2026-08-16 修复：累计追加本金真正累加（此前 cumulative_added 只定义不赋值，
+        # 导致 grid.py 用 (total_equity - cumulative_added) 作风控分母时永远扣不到追加的钱）
+        if actual_added > 0:
+            st.cumulative_added = (getattr(st, "cumulative_added", 0.0) or 0.0) + actual_added
         _add_log(st, f"💰 追加本金: {actual_added:.2f} USDT → 网格可用 {_grid_available(st):.2f}",
                  cat="PARAM", data={"amount": amount, "actual_added": actual_added,
                                     "reserved": st.reserved_capital, "available": _grid_available(st)})

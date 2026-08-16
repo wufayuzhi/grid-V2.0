@@ -95,8 +95,18 @@ def execute_start_grid(contracts: int = 0) -> dict:
             max_buy = int(float(max_info.get("maxBuy", "0") or 0))
             max_sell = int(float(max_info.get("maxSell", "0") or 0))
             # 对冲双开：每边张数上限 = 交易所最大(单边) ÷ 2，资金分给双边
-            max_ct = min(max_buy, max_sell) if max_buy > 0 and max_sell > 0 else max(max_buy, max_sell)
-            max_ct = max(max_ct // 2, 1)
+            # 2026-08-16 统一口径：× (网格可用资金 ÷ 总权益) 资金因子，与 precheck 完全一致
+            # （预留的资金不算进网格可开量，有预留时更保守；无预留时因子=1 无影响）
+            max_ct = min(max_buy, max_sell) if max_buy > 0 and max_sell > 0 else 0  # 0侧=不可开，不兜底
+            grid_cap = getattr(st, "total_equity", 0) or 0
+            grid_cap -= getattr(st, "reserved_capital", 0) or 0
+            total_eq = getattr(st, "total_equity", 0) or 1
+            cap_ratio = (grid_cap / total_eq) if total_eq > 0 and grid_cap > 0 else 1.0
+            # 0侧不可开（getMaxSize 返回0）→ 明确报错，不静默建1张（2026-08-16 修复0侧兜底误判）
+            if max_ct <= 0:
+                _log(st, "🚫 交易所返回某方向不可开(maxBuy/maxSell≤0)，无法对冲建仓", level="ERROR", cat="BUILD")
+                return {"status": "error", "msg": "交易所返回某方向不可开，无法对冲建仓"}
+            max_ct = max(int((max_ct // 2) * cap_ratio), 1)
             if max_ct < 1:
                 max_ct = 1
         except Exception as e:

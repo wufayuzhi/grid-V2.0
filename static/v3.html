@@ -3876,9 +3876,19 @@ function updatePMResult(kind) {
     const anchor = S.grid_anchor_px > 0 ? S.grid_anchor_px
       : ((lAvg > 0 || sAvg > 0) ? (((lAvg + sAvg) / 2) || mark) : (mark || 0)); // 锚点
     // 实际间距：ATR% × 密度（滑块密度实时算预览；滑块未动用后端值）
-    const spacing = (atrPct > 0 && density > 0)
+    let spacing = (atrPct > 0 && density > 0)
       ? (atrPct * density)          // 文档公式：间距 = ATR% × 密度
       : realSpacing;
+    // 网格间隔下限钳制（与 calc_grid_levels / _refresh_grid_display 完全同源，2026-08-16）：
+    // 间隔 = ATR% × 密度，要求最终间隔 ≥ max(用户间隔下限, 双向费率0.2%)，保证覆盖手续费
+    if (atrPct > 0 && density > 0) {
+      const denMinEl = document.getElementById('mod-density_min');
+      const userMin = (denMinEl && parseFloat(denMinEl.value) > 0) ? parseFloat(denMinEl.value)
+        : (S.density_min > 0 ? S.density_min : 0.3);
+      const spacingMin = Math.max(userMin, 0.2);   // 至少覆盖双向手续费(0.1%×2)
+      const effDensity = Math.max(density, spacingMin / atrPct);
+      spacing = atrPct * effDensity;
+    }
     // 上下挂单价：按实时间距从锚点算（拖密度立即预览新挂单价）
     const up = (anchor > 0 && spacing > 0) ? anchor * (1 + spacing / 100) : S.grid_upper_px || 0;
     const dn = (anchor > 0 && spacing > 0) ? anchor * (1 - spacing / 100) : S.grid_lower_px || 0;
