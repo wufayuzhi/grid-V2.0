@@ -107,6 +107,7 @@ def save_state():
         "atr_timeframe": st.atr_timeframe,
         "atr_period": st.atr_period,
         "density_min": st.density_min,
+        "density_max": st.density_max,
         "cumulative_added": st.cumulative_added,
         "safety_flat_threshold": st.safety_flat_threshold,
         "auto_rebuild_blocked": st.auto_rebuild_blocked,
@@ -255,6 +256,7 @@ def load_state() -> GridState:
         st.atr_timeframe = data.get("atr_timeframe", "1H")
         st.atr_period = data.get("atr_period", 24)
         st.density_min = data.get("density_min", 0.6)
+        st.density_max = data.get("density_max", 2.0)
         st.cumulative_added = data.get("cumulative_added", 0.0)
         st.safety_flat_threshold = data.get("safety_flat_threshold", 5.0)
         st.auto_rebuild_blocked = data.get("auto_rebuild_blocked", False)

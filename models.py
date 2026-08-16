@@ -133,6 +133,7 @@ class GridState:
     atr_timeframe: str = "1H"          # ATR 时间框架（默认1H）
     atr_period: int = 24               # ATR 周期 N
     density_min: float = 0.6           # 挂单间隔%下限（2026-08-16 改口径：非密度，是实际挂单间隔%下限；间隔=ATR%×密度，钳制最终间隔≥max(此值, 双向费率)）
+    density_max: float = 2.0           # 挂单间隔%上限（2026-08-17 新增：钳制最终间隔≤此值，防ATR暴涨时间距过宽、挂单离现价太远网格失效）
     # 统一口径
     cumulative_added: float = 0.0      # 累计追加本金（失血/累计回撤/防抖线分母剔除）
 
@@ -309,6 +310,7 @@ class GridState:
                 "adj_ratio": self.adj_ratio,
                 "base_density": self.base_density,
                 "density_min": self.density_min,
+                "density_max": self.density_max,
                 "defense_density": self.defense_density,
                 "mode": self.mode,
                 "one_way_threshold": self.one_way_threshold,

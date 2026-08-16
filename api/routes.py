@@ -1707,7 +1707,7 @@ def register_routes(app: FastAPI):
                   "one_way_threshold", "loss_ratio_tight1", "loss_ratio_tight2", "ladder_rates", "ladder_gap_up", "ladder_gap_dn", "ladder_enabled",
                   "ladder_exit_pct", "ladder_cooldown_min",
                   "confirm_time", "debounce_loss_line",
-                  "debounce_profit_line", "atr_timeframe", "atr_period", "density_min",
+                  "debounce_profit_line", "atr_timeframe", "atr_period", "density_min", "density_max",
                   "safety_flat_threshold",
                   "trend_tf", "ema_fast", "ema_slow", "st_period", "st_mult",
                   ]:
@@ -1747,7 +1747,7 @@ def register_routes(app: FastAPI):
         #   ② 失衡率档位参数（ladder_rates/ladder_densities/one_way_threshold）
         #      → 只有"当前失衡率 ≥ 达到该档阈值"才重挂（没达到档位不重挂）
         #   ③ 风控/冰山/失血/其它 → 永不重挂（不影响挂单价）
-        grid_direct = {"adj_ratio", "base_density", "defense_density", "density_min",
+        grid_direct = {"adj_ratio", "base_density", "defense_density", "density_min", "density_max",
                        "atr_timeframe", "atr_period", "mode"}  # mode改密度→改挂单价，须重挂(2026-08-16)
         ladder_keys = {"ladder_rates", "ladder_gap_up", "ladder_gap_dn", "one_way_threshold"}
 

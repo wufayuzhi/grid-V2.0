@@ -1166,6 +1166,9 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
           <div class="sl-row"><span>挂单间隔下限</span><span class="sl-val" id="sl-density_min">0.6</span></div>
           <input type="range" class="mod-slider" id="mod-density_min" min="0.3" max="2.0" step="0.1" value="0.6" oninput="onModChange('density_min',this)">
           <div class="pm-note">实际挂单间隔%下限，间隔=ATR%×密度；保证 ≥此值 且 ≥双向手续费</div>
+          <div class="sl-row"><span>挂单间隔上限</span><span class="sl-val" id="sl-density_max">2.0</span></div>
+          <input type="range" class="mod-slider" id="mod-density_max" min="0.6" max="5.0" step="0.1" value="2.0" oninput="onModChange('density_max',this)">
+          <div class="pm-note">实际挂单间隔%上限，间隔=ATR%×密度；保证 ≤此值（防ATR暴涨时间距过宽、挂单离现价太远）</div>
           <div class="sl-row"><span>后备间距(ATR未就绪时)</span><span class="sl-val" id="sl-target_spacing_pct">0.60</span></div>
           <input type="range" class="mod-slider" id="mod-target_spacing_pct" min="0.2" max="2.0" step="0.05" value="0.60" oninput="onModChange('target_spacing_pct',this)">
           <div class="pm-note">ATR数据未就绪/不可用时作为挂单间距回退；ATR正常时用 ATR%×密度</div>
@@ -2358,6 +2361,7 @@ async function refresh() {
         // 网格调仓组
         ['mod-base_density','base_density'],
         ['mod-density_min','density_min'],
+        ['mod-density_max','density_max'],
         ['mod-atr_period','atr_period'],
         // 风控强度组
         ['mod-safety_flat_threshold','safety_flat_threshold'],
@@ -2716,8 +2720,8 @@ function buildCalcDetails(S) {
   // ② grid_spacing
   cd.grid_spacing = {
     id: 'grid_spacing', icon: '📐', title: '网格间距',
-    formula: '网格间距 = ATR% × 密度（并钳制 ≥ 挂单间隔下限% 且 ≥ 双向费率）',
-    vars: `ATR%=${(p.atr_pct||S.atr_pct||0).toFixed(3)}, 密度=${(p.base_density||S.base_density||2.0).toFixed(2)}, 间隔下限=${(p.density_min||S.density_min||0.6).toFixed(2)}%`,
+    formula: '网格间距 = ATR% × 密度（并钳制在下限% 与 上限% 之间，且 ≥ 双向费率）',
+    vars: `ATR%=${(p.atr_pct||S.atr_pct||0).toFixed(3)}, 密度=${(p.base_density||S.base_density||2.0).toFixed(2)}, 间隔下限=${(p.density_min||S.density_min||0.6).toFixed(2)}%, 间隔上限=${(p.density_max||S.density_max||2.0).toFixed(2)}%`,
     result: `实际间距=${spacing.toFixed(2)}%`
   };
 
@@ -3716,7 +3720,7 @@ function onSTChange() {
 
 // ═══════════════════ PARAM MODALS ═══════════════════
 const PM_KEYS = {
-  grid: ['base_density','density_min','atr_timeframe','atr_period','adj_ratio'],
+  grid: ['base_density','density_min','density_max','atr_timeframe','atr_period','adj_ratio'],
   risk: ['safety_factor',
          'safety_flat_threshold'],
   imb:  ['imbalance_threshold_pct','rebalance_target_pct',
@@ -3728,7 +3732,7 @@ const PM_KEYS = {
   trend:['trend_tf','ema_fast','ema_slow','st_period','st_mult','defense_density']
 };
 const PM_MAP = {
-  grid: { fm: 'pm-fm-grid_spacing', sliders: [['mod-base_density','sl-base_density','base_density'],['mod-density_min','sl-density_min','density_min'],['mod-target_spacing_pct','sl-target_spacing_pct','target_spacing_pct'],['mod-atr_timeframe','sl-atr_timeframe','atr_timeframe'],['mod-atr_period','sl-atr_period','atr_period']] },
+  grid: { fm: 'pm-fm-grid_spacing', sliders: [['mod-base_density','sl-base_density','base_density'],['mod-density_min','sl-density_min','density_min'],['mod-density_max','sl-density_max','density_max'],['mod-target_spacing_pct','sl-target_spacing_pct','target_spacing_pct'],['mod-atr_timeframe','sl-atr_timeframe','atr_timeframe'],['mod-atr_period','sl-atr_period','atr_period']] },
   risk: { fm: 'pm-fm-effective_params', sliders: [['mod-safety_factor','sl-safety_factor','safety_factor'],['mod-safety_flat_threshold','sl-safety_flat_threshold','safety_flat_threshold']] },
   imb:  { fm: '', sliders: [['mod-imbalance_threshold_pct','sl-imbalance_threshold_pct','imbalance_threshold_pct'],['mod-rebalance_target_pct','sl-rebalance_target_pct','rebalance_target_pct'],['mod-rebalance_batches','sl-rebalance_batches','rebalance_batches'],['mod-rebalance_batch_gap_min','sl-rebalance_batch_gap_min','rebalance_batch_gap_min'],['mod-rebalance_limit_timeout_min','sl-rebalance_limit_timeout_min','rebalance_limit_timeout_min'],['mod-one_way_threshold','sl-one_way_threshold','one_way_threshold'],['mod-loss_ratio_tight1','sl-loss_ratio_tight1','loss_ratio_tight1'],['mod-loss_ratio_tight2','sl-loss_ratio_tight2','loss_ratio_tight2'],['mod-ladder_exit_pct','sl-ladder_exit_pct','ladder_exit_pct'],['mod-ladder_cooldown_min','sl-ladder_cooldown_min','ladder_cooldown_min'],['mod-confirm_time','sl-confirm_time','confirm_time'],['mod-debounce_loss_line','sl-debounce_loss_line','debounce_loss_line'],['mod-debounce_profit_line','sl-debounce_profit_line','debounce_profit_line']] },
   ice:  { fm: 'pm-fm-iceberg', sliders: [['mod-iceberg_sz','sl-iceberg_sz','iceberg_sz'],['mod-pxVar','sl-pxVar','pxVar']] },
@@ -3877,7 +3881,11 @@ function updatePMResult(kind) {
       const userMin = (denMinEl && parseFloat(denMinEl.value) > 0) ? parseFloat(denMinEl.value)
         : (S.density_min > 0 ? S.density_min : 0.3);
       const spacingMin = Math.max(userMin, 0.2);   // 至少覆盖双向手续费(0.1%×2)
-      const effDensity = Math.max(density, spacingMin / atrPct);
+      const denMaxEl = document.getElementById('mod-density_max');   // 上限（2026-08-17，与引擎同源）
+      const userMax = (denMaxEl && parseFloat(denMaxEl.value) > 0) ? parseFloat(denMaxEl.value)
+        : (S.density_max > 0 ? S.density_max : 2.0);
+      let effDensity = Math.max(density, spacingMin / atrPct);
+      effDensity = Math.min(effDensity, userMax / atrPct);   // 防ATR暴涨时间距过宽
       spacing = atrPct * effDensity;
     }
     // 上下挂单价：按实时间距从锚点算（拖密度立即预览新挂单价）
