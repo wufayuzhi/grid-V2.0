@@ -240,12 +240,18 @@ def _state_dict(st):
             "avg_px": px_round(_inst, getattr(pos, "long_avg_px", 0.0)),
             "unrealized_pnl": round(getattr(pos, "long_unrealized_pnl", 0.0), 2),
             "liq_px": px_round(_inst, getattr(pos, "long_liq_px", 0.0)),
+            "be_px": px_round(_inst, getattr(pos, "long_be_px", 0.0)),
+            "margin": round(getattr(pos, "position_margin", 0.0), 2),
+            "notional": round(getattr(pos, "notional_usd", 0.0), 2),
         }
         d["short"] = {
             "contracts": getattr(pos, "short_contracts", 0),
             "avg_px": px_round(_inst, getattr(pos, "short_avg_px", 0.0)),
             "unrealized_pnl": round(getattr(pos, "short_unrealized_pnl", 0.0), 2),
             "liq_px": px_round(_inst, getattr(pos, "short_liq_px", 0.0)),
+            "be_px": px_round(_inst, getattr(pos, "short_be_px", 0.0)),
+            "margin": round(getattr(pos, "position_margin", 0.0), 2),
+            "notional": round(getattr(pos, "notional_usd", 0.0), 2),
         }
     d["grid_available"] = round(_grid_available(st), 2)
     d["params"] = {

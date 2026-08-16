@@ -807,6 +807,7 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
       <div class="pr"><span>盈亏平衡</span><span id="long-be">—</span></div>
       <div class="pr"><span>保证金率</span><span id="long-mmr">—</span></div>
       <div class="pr"><span>保证金</span><span id="long-margin">—</span></div>
+      <div class="pr"><span>名义价值</span><span id="long-notional">—</span></div>
     </div>
     <div class="pos-liq safe" id="long-liq-status">強平安全</div>
   </div>
@@ -821,6 +822,7 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
       <div class="pr"><span>盈亏平衡</span><span id="short-be">—</span></div>
       <div class="pr"><span>保证金率</span><span id="short-mmr">—</span></div>
       <div class="pr"><span>保证金</span><span id="short-margin">—</span></div>
+      <div class="pr"><span>名义价值</span><span id="short-notional">—</span></div>
     </div>
     <div class="pos-liq warn" id="short-liq-status">強平安全</div>
   </div>
@@ -2218,15 +2220,17 @@ function updatePos(side, pos, mark) {
   const be = bePx > 0 ? bePx : 0;
   document.getElementById(side + '-be').textContent = be > 0 ? fmtPx(be) : '—';
 
-  // MMR
+  // MMR（无交易所单独字段则用默认；margin 直接用交易所给的 pos.margin，不自算）
   const mmr = S.mmr || 0.005;
   document.getElementById(side + '-mmr').textContent = (mmr * 100).toFixed(1) + '%';
 
-  // 保证金 = ct_val × 张数 × 标记价 / 杠杆
-  const ctVal = S.ct_val || 0.1;
-  const lev = S.params?.leverage || S.leverage || 20;
-  const margin = mark > 0 ? (ctVal * contracts * mark / lev) : 0;
-  document.getElementById(side + '-margin').textContent = '$' + margin.toFixed(2);
+  // 保证金 —— 直接用交易所持仓 margin（后端从 OKX positions.margin 读取），不自算
+  const posMargin = pos.margin || 0;
+  document.getElementById(side + '-margin').textContent = posMargin > 0 ? '$' + posMargin.toFixed(2) : '—';
+  // 名义价值 —— 直接用交易所持仓 notionalUsd（后端读取），不自算
+  const posNotional = pos.notional || 0;
+  const notEl = document.getElementById(side + '-notional');
+  if (notEl) notEl.textContent = posNotional > 0 ? '$' + posNotional.toFixed(2) : '—';
 
   // 浮动盈亏
   const pnlEl = document.getElementById(side + '-pnl');

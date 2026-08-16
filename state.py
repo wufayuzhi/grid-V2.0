@@ -53,6 +53,8 @@ def save_state():
         "short_unrealized_pnl": round(st.position.short_unrealized_pnl, 2),
         "short_liq_px": px_round(st.inst_id, st.position.short_liq_px),
         "short_be_px": px_round(st.inst_id, st.position.short_be_px),
+        "position_margin": round(st.position.position_margin, 2),
+        "notional_usd": round(st.position.notional_usd, 2),
         "mark_px": px_round(st.inst_id, st.position.mark_px),
         "last_px": px_round(st.inst_id, st.position.last_px),
         "atr_abs": st.atr_abs,
