@@ -3560,11 +3560,52 @@ function updatePMResult(kind) {
   } else if (kind === 'imb') {
     const th = g('mod-imbalance_threshold_pct') || 80;
     const rt = g('mod-rebalance_target_pct') || 40;
+    const bt = g('mod-rebalance_batches') || 2;
+    // 反推"回补到目标失衡率"后的仓位（对开，总持仓不变）
+    const T = lC + sC;
+    const curNet = Math.abs(lC - sC);            // 当前净敞口
+    const targetNet = T > 0 ? T * rt / 100 : 0;  // 目标失衡率对应净敞口
+    const rebalQty = T > 0 ? Math.max((curNet - targetNet) / 2, 0) : 0;  // 回补量
+    // 回补后仓位：重仓侧减 rebalQty，轻仓侧加 rebalQty
+    let afterLong = lC, afterShort = sC;
+    if (lC > sC) { afterLong = lC - rebalQty; afterShort = sC + rebalQty; }
+    else if (sC > lC) { afterShort = sC - rebalQty; afterLong = lC + rebalQty; }
+    const afterImb = T > 0 ? Math.abs(afterLong - afterShort) / T * 100 : 0;
     h = _pmRow('当前失衡率', imb.toFixed(1) + '%');
+    h += _pmRow('当前仓位', '多' + lC + ' / 空' + sC, true);
     h += _pmRow('回补触发', th + '%', true);
     h += _pmRow(imb >= th ? '⚠️ 已触发回补' : '距触发还差', imb >= th ? (imb - th).toFixed(1) + '%' : (th - imb).toFixed(1) + '%');
     h += _pmRow('回补目标', rt + '%（须<' + th + '%）');
-    h += _pmRow('回补量(净敞口/2)', (Math.abs(net) / 2).toFixed(1) + ' 张', true);
+    h += _pmRow('回补量(需' + bt + '批)', rebalQty.toFixed(1) + ' 张', true);
+    h += _pmRow('每批', bt > 0 ? (rebalQty / bt).toFixed(1) + ' 张' : '—');
+    h += _pmRow('回补后仓位', '多' + afterLong.toFixed(1) + ' / 空' + afterShort.toFixed(1), true);
+    h += _pmRow('回补后失衡', afterImb.toFixed(1) + '%');
+    // 当前档位预览（与后端 _ladder_gap 同源：失衡≥档位阈值→命中该档上下端价差）
+    const rates = (S.params && S.params.ladder_rates) || [40, 50, 60, 70, 80];
+    const gupA = (S.params && S.params.ladder_gap_up) || [2.0, 1.5, 1.2, 1.0, 0.8];
+    const gdnA = (S.params && S.params.ladder_gap_dn) || [1.0, 0.8, 0.7, 0.5, 0.4];
+    const enA = (S.params && S.params.ladder_enabled) || [true, true, true, true, true];
+    let hitIdx = -1;
+    for (let i = 0; i < rates.length; i++) if (enA[i] && imb >= rates[i]) hitIdx = i;
+    if (hitIdx >= 0) {
+      const upG = Math.max(gupA[hitIdx], 0.3), dnG = Math.max(gdnA[hitIdx], 0.3);
+      const anc = S.grid_anchor_px > 0 ? S.grid_anchor_px : ((lAvg > 0 || sAvg > 0) ? ((lAvg + sAvg) / 2 || mark) : mark);
+      h += _pmRow('当前档位', '档' + (hitIdx + 1) + '（失衡≥' + rates[hitIdx] + '%）', true);
+      h += _pmRow('档位价差', '上' + upG.toFixed(1) + '% / 下' + dnG.toFixed(1) + '%');
+      if (anc > 0) {
+        h += _pmRow('上端挂单价', (anc * (1 + upG / 100)).toFixed(6), true);
+        h += _pmRow('下端挂单价', (anc * (1 - dnG / 100)).toFixed(6), true);
+      }
+    } else {
+      h += _pmRow('当前档位', '正常网格（失衡<档1 ' + (rates[0] || 40) + '%）');
+    }
+    // 触发值递增硬约束校验：收网最大档位 < 单边阈值 < 回补触发
+    const ow = g('mod-one_way_threshold') || 60;
+    const lastRate = (S.params && S.params.ladder_rates) ? Math.max.apply(null, (S.params.ladder_rates || [40,50,60,70,80])) : 80;
+    const okInc = (lastRate < ow && ow < th);
+    h += _pmRow(okInc ? '✅ 触发值递增合规' : '🔴 触发值递增违规', 
+      '收网' + lastRate + ' < 单边' + ow + ' < 回补' + th,
+      okInc ? false : true);
   } else if (kind === 'ice') {
     const sz = g('mod-iceberg_sz') || 2;
     const pv = g('mod-pxVar') || 1.0;
