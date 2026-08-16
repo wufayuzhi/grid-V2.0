@@ -136,15 +136,17 @@ class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
         method = request.method.upper()
+        # 归一化：剥掉 /W2 前缀（W2Prefix 中间件后执行，此处需自行处理）
+        norm = path[3:] if path.startswith("/W2") else path
 
         # 1) 免鉴权接口
-        if path.startswith("/api/v1/auth/"):
+        if norm.startswith("/api/v1/auth/"):
             return await call_next(request)
 
         # 2) 静态 / 前端 / 健康检查 → 放行
-        if not path.startswith("/api/"):
+        if not norm.startswith("/api/"):
             return await call_next(request)
-        if path in ("/health",) or path.startswith("/health"):
+        if norm in ("/health",) or norm.startswith("/health"):
             return await call_next(request)
 
         # 3) API 需要 token
