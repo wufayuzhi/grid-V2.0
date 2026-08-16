@@ -1083,9 +1083,6 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
           <div class="sl-row"><span>安全系数</span><span class="sl-val" id="sl-safety_factor">0.70</span></div>
           <input type="range" class="mod-slider" id="mod-safety_factor" min="0.30" max="0.90" step="0.05" value="0.70" oninput="onModChange('safety_factor',this)">
           <div class="pm-note">建仓张数 = 单边极限 × 安全系数（留安全余量）</div>
-          <div class="sl-row"><span>缩仓速度</span><span class="sl-val" id="sl-shrink_pct">10</span></div>
-          <input type="range" class="mod-slider" id="mod-shrink_pct" min="5" max="30" step="1" value="10" oninput="onModChange('shrink_pct',this)">
-          <div class="pm-note">预警区每次缩仓的百分比（哪边重缩哪边）</div>
           <div class="pm-div"></div>
           <div class="sw-row"><label><input type="checkbox" id="mod-use_safety_flat" checked onchange="onModBoolChange('use_safety_flat',this)"> 安全距离全平（强平空间兜底）</label></div>
           <div class="pm-div"></div>
@@ -2041,7 +2038,6 @@ async function refresh() {
       // [滑块id, 后端参数key]：覆盖所有有滑块控件的参数（含带 mod-trend_ 前缀的趋势组）
       const sliderMap = [
         ['mod-safety_factor','safety_factor'],
-        ['mod-shrink_pct','shrink_pct'],
         ['mod-bleed_threshold_pct','bleed_threshold_pct'],
         ['mod-target_spacing_pct','target_spacing_pct'],
         ['mod-adj_ratio','adj_ratio'],
@@ -2382,7 +2378,6 @@ function buildCalcDetails(S) {
   const useDyn = p.use_dynamic_params !== undefined ? p.use_dynamic_params : S.use_dynamic_params;
   const effWarn = p.effective_warning_ratio || S.effective_warning_ratio || 0;
   const effRisk = p.effective_risk_ratio || S.effective_risk_ratio || 0;
-  const effShrink = p.effective_shrink_pct || S.effective_shrink_pct || 0;
   const effBleed = p.effective_bleed_threshold || S.effective_bleed_threshold || 0;
   const longLiq = (S.long && S.long.liq_px) ? S.long.liq_px : 0;
   const shortLiq = (S.short && S.short.liq_px) ? S.short.liq_px : 0;
@@ -2445,7 +2440,7 @@ function buildCalcDetails(S) {
     id: 'effective_params', icon: '🛡️', title: '有效参数',
     formula: '有效安全系数/预警比/风控比 (动态模式=公式计算, 静态模式=滑块值)',
     vars: `use_dynamic=${useDyn}, DR=${dr.toFixed(3)}, 杠杆=${lev}倍`,
-    result: `安全系数=${safetyFactor.toFixed(2)}, 预警比=${effWarn.toFixed(2)}, 风控比=${effRisk.toFixed(2)}, 缩仓速度=${effShrink.toFixed(1)}%, 失血熔断=${effBleed.toFixed(2)}%`
+    result: `安全系数=${safetyFactor.toFixed(2)}, 预警比=${effWarn.toFixed(2)}, 风控比=${effRisk.toFixed(2)}, 失血熔断=${effBleed.toFixed(2)}%`
   };
 
   // ⑥ iceberg (for tooltip)
@@ -3370,7 +3365,7 @@ function onSTChange() {
 // ═══════════════════ PARAM MODALS ═══════════════════
 const PM_KEYS = {
   grid: ['base_density','density_min','atr_timeframe','atr_period','adj_ratio'],
-  risk: ['safety_factor','shrink_pct',
+  risk: ['safety_factor',
          'safety_flat_threshold'],
   imb:  ['imbalance_threshold_pct','rebalance_target_pct',
          'one_way_threshold','confirm_time','exit_buffer','debounce_loss_line','debounce_profit_line',
@@ -3382,7 +3377,7 @@ const PM_KEYS = {
 };
 const PM_MAP = {
   grid: { fm: 'pm-fm-grid_spacing', sliders: [['mod-base_density','sl-base_density','base_density'],['mod-density_min','sl-density_min','density_min'],['mod-atr_timeframe','sl-atr_timeframe','atr_timeframe'],['mod-atr_period','sl-atr_period','atr_period']] },
-  risk: { fm: 'pm-fm-effective_params', sliders: [['mod-safety_factor','sl-safety_factor','safety_factor'],['mod-shrink_pct','sl-shrink_pct','shrink_pct'],['mod-safety_flat_threshold','sl-safety_flat_threshold','safety_flat_threshold']] },
+  risk: { fm: 'pm-fm-effective_params', sliders: [['mod-safety_factor','sl-safety_factor','safety_factor'],['mod-safety_flat_threshold','sl-safety_flat_threshold','safety_flat_threshold']] },
   imb:  { fm: '', sliders: [['mod-imbalance_threshold_pct','sl-imbalance_threshold_pct','imbalance_threshold_pct'],['mod-rebalance_target_pct','sl-rebalance_target_pct','rebalance_target_pct'],['mod-rebalance_batches','sl-rebalance_batches','rebalance_batches'],['mod-rebalance_batch_gap_min','sl-rebalance_batch_gap_min','rebalance_batch_gap_min'],['mod-rebalance_limit_timeout_min','sl-rebalance_limit_timeout_min','rebalance_limit_timeout_min'],['mod-one_way_threshold','sl-one_way_threshold','one_way_threshold'],['mod-confirm_time','sl-confirm_time','confirm_time'],['mod-exit_buffer','sl-exit_buffer','exit_buffer'],['mod-debounce_loss_line','sl-debounce_loss_line','debounce_loss_line'],['mod-debounce_profit_line','sl-debounce_profit_line','debounce_profit_line']] },
   ice:  { fm: 'pm-fm-iceberg', sliders: [['mod-iceberg_sz','sl-iceberg_sz','iceberg_sz'],['mod-pxVar','sl-pxVar','pxVar']] },
   bleed:{ fm: '', sliders: [['mod-bleed_threshold_pct','sl-bleed_threshold_pct','bleed_threshold_pct'],['mod-bleed_window_sec','sl-bleed_window_sec','bleed_window_sec'],['mod-equity_history_window_sec','sl-equity_history_window_sec','equity_history_window_sec']] },
@@ -3540,11 +3535,9 @@ function updatePMResult(kind) {
         (stepN > 0 ? stepN : '—') + ' 张');
   } else if (kind === 'risk') {
     const sf = g('mod-safety_factor') || 0.7;
-    const sk = g('mod-shrink_pct') || 10;
     const sl = S.singleLimit || 0;
     const oneSide = Math.max(lC, sC);
     h = _pmRow('安全开仓参考', sl > 0 ? (Math.floor(sl * sf)) + ' 张' : '—', true);
-    h += _pmRow('预警缩仓量(单边×' + sk + '%)', (oneSide * sk / 100).toFixed(1) + ' 张');
     h += _pmRow('当前失衡率', imb.toFixed(1) + '%');
     h += _pmRow('当前单边持仓', oneSide + ' 张');
     h += _pmRow('当前总权益', eq.toFixed(1) + ' USDT');
@@ -3668,7 +3661,7 @@ async function saveAllParams() {
 function applyPreset(type, el) {
   const presets = {
     conservative: {
-      safety_factor: 0.85, shrink_pct: 25, bleed_threshold_pct: 5,
+      safety_factor: 0.85, bleed_threshold_pct: 5,
       target_spacing_pct: 0.40, adj_ratio: 0.04,
       imbalance_threshold_pct: 10,
       iceberg_sz: 1, pxVar: 1.5,
@@ -3676,7 +3669,7 @@ function applyPreset(type, el) {
       adjust_split_ratio: 0.40
     },
     standard: {
-      safety_factor: 0.70, shrink_pct: 10, bleed_threshold_pct: 3,
+      safety_factor: 0.70, bleed_threshold_pct: 3,
       target_spacing_pct: 0.60, adj_ratio: 0.06,
       imbalance_threshold_pct: 20,
       iceberg_sz: 2, pxVar: 1.0,
@@ -3684,7 +3677,7 @@ function applyPreset(type, el) {
       adjust_split_ratio: 0.50
     },
     aggressive: {
-      safety_factor: 0.45, shrink_pct: 5, bleed_threshold_pct: 2,
+      safety_factor: 0.45, bleed_threshold_pct: 2,
       target_spacing_pct: 0.85, adj_ratio: 0.10,
       imbalance_threshold_pct: 35,
       iceberg_sz: 4, pxVar: 0.8,

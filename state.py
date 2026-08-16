@@ -84,7 +84,6 @@ def save_state():
         "rebalance_limit_timeout_min": st.rebalance_limit_timeout_min,
         "rebalance_market_after_timeout": st.rebalance_market_after_timeout,
         "safety_factor": st.safety_factor,
-        "shrink_pct": st.shrink_pct,
         "bleed_threshold_pct": st.bleed_threshold_pct,
         "target_spacing_pct": st.target_spacing_pct,
         "adj_ratio": st.adj_ratio,
@@ -221,7 +220,6 @@ def load_state() -> GridState:
         st.rebalance_limit_timeout_min = data.get("rebalance_limit_timeout_min", 10.0)
         st.rebalance_market_after_timeout = data.get("rebalance_market_after_timeout", True)
         st.safety_factor = data.get("safety_factor", 0.7)
-        st.shrink_pct = data.get("shrink_pct", 10.0)
         st.bleed_threshold_pct = data.get("bleed_threshold_pct", 3.0)
         st.target_spacing_pct = data.get("target_spacing_pct", 0.60)
         st.adj_ratio = data.get("adj_ratio", 0.06)

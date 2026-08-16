@@ -94,7 +94,6 @@ class GridState:
     rebalance_market_after_timeout: bool = True  # 勾选=限价超时转市价；不勾选=只挂限价不转市价
     # 风控
     safety_factor: float = 0.7
-    shrink_pct: float = 10.0
     bleed_threshold_pct: float = 3.0
     # 网格
     target_spacing_pct: float = 0.60
@@ -285,7 +284,6 @@ class GridState:
                 "use_bleed_melt": self.use_bleed_melt,
                 "use_rebalance": self.use_rebalance,
                 "safety_factor": self.safety_factor,
-                "shrink_pct": self.shrink_pct,
                 "bleed_threshold_pct": self.bleed_threshold_pct,
                 "tp_base_pct": self.tp_base_pct,
                 "tp_window_hours": self.tp_window_hours,

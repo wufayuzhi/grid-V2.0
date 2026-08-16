@@ -228,7 +228,7 @@ def _state_dict(st):
         "health_stale_sec", "health_max_failures", "tp_base_pct", "tp_window_hours",
         "imbalance_threshold_pct", "rebalance_target_pct", "rebalance_batches",
         "rebalance_batch_gap_min", "rebalance_limit_timeout_min", "rebalance_market_after_timeout",
-        "safety_factor", "shrink_pct", "bleed_threshold_pct",
+        "safety_factor", "bleed_threshold_pct",
     ):
         d[k] = getattr(st, k, None)
     pos = getattr(st, "position", None)
@@ -265,7 +265,6 @@ def _state_dict(st):
         "use_bleed_melt": getattr(st, "use_bleed_melt", True),
         "use_safety_flat": getattr(st, "use_safety_flat", True),
         "safety_factor": getattr(st, "safety_factor", 0.7),
-        "shrink_pct": getattr(st, "shrink_pct", 10.0),
         "bleed_threshold_pct": getattr(st, "bleed_threshold_pct", 3.0),
         "price_offset_pct": getattr(st, "price_offset_pct", 0.2),
         "adjust_split_ratio": getattr(st, "adjust_split_ratio", 0.5),
@@ -1673,7 +1672,7 @@ def register_routes(app: FastAPI):
                   "iceberg_sz", "pxVar", "auto_adjust", "grid_auto_run", "use_iceberg",
                   "use_risk_control", "use_bleed_melt",
                   "use_safety_flat", "use_rebalance",
-                  "safety_factor", "shrink_pct",
+                  "safety_factor",
                   "bleed_threshold_pct",
                   "price_offset_pct", "adjust_split_ratio", "adj_ratio",
                   "target_spacing_pct", "rebalance_target_pct", "rebalance_batches",
