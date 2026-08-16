@@ -1361,8 +1361,6 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
           <div class="pm-note">SuperTrend 乘数（趋势判定用）</div>
           <div class="pm-div"></div>
           <div class="pm-sub">OI盖章（真单边唯一判据）</div>
-          <div class="sl-row"><span>OI根数N</span><span class="sl-val" id="sl-oi_n">3</span></div>
-          <input type="range" class="mod-slider" id="mod-oi_n" min="1" max="10" step="1" value="3" oninput="onModChange('oi_n',this)">
           <div class="pm-note">OI窗口 = N × 趋势TF（近N根 vs 前N根）</div>
           <div class="pm-div"></div>
           <div class="pm-sub">进攻/防守联动（文档§5.2）</div>
@@ -2376,7 +2374,6 @@ async function refresh() {
         ['mod-ema_slow','ema_slow'],
         ['mod-trend_st_period','st_period'],
         ['mod-trend_st_mult','st_mult'],
-        ['mod-oi_n','oi_n'],
         ['mod-defense_density','defense_density']
       ];
       sliderMap.forEach(([sid, key]) => {
@@ -3737,7 +3734,7 @@ const PM_KEYS = {
   ice:  ['iceberg_sz','pxVar'],
   bleed:['bleed_threshold_pct','bleed_window_sec','equity_history_window_sec'],
   ind:  ['tp_base_pct','tp_window_hours'],
-  trend:['trend_tf','ema_fast','ema_slow','st_period','st_mult','oi_n','defense_density']
+  trend:['trend_tf','ema_fast','ema_slow','st_period','st_mult','defense_density']
 };
 const PM_MAP = {
   grid: { fm: 'pm-fm-grid_spacing', sliders: [['mod-base_density','sl-base_density','base_density'],['mod-density_min','sl-density_min','density_min'],['mod-atr_timeframe','sl-atr_timeframe','atr_timeframe'],['mod-atr_period','sl-atr_period','atr_period']] },
@@ -3746,7 +3743,7 @@ const PM_MAP = {
   ice:  { fm: 'pm-fm-iceberg', sliders: [['mod-iceberg_sz','sl-iceberg_sz','iceberg_sz'],['mod-pxVar','sl-pxVar','pxVar']] },
   bleed:{ fm: '', sliders: [['mod-bleed_threshold_pct','sl-bleed_threshold_pct','bleed_threshold_pct'],['mod-bleed_window_sec','sl-bleed_window_sec','bleed_window_sec'],['mod-equity_history_window_sec','sl-equity_history_window_sec','equity_history_window_sec']] },
   ind:  { fm: 'pm-fm-zone',    sliders: [['mod-tp_base_pct','sl-tp_base_pct','tp_base_pct'],['mod-tp_window_hours','sl-tp_window_hours','tp_window_hours']] },
-  trend:{ fm: '', sliders: [['mod-trend_tf','sl-trend_tf','trend_tf'],['mod-ema_fast','sl-ema_fast','ema_fast'],['mod-ema_slow','sl-ema_slow','ema_slow'],['mod-trend_st_period','sl-trend_st_period','st_period'],['mod-trend_st_mult','sl-trend_st_mult','st_mult'],['mod-oi_n','sl-oi_n','oi_n'],['mod-defense_density','sl-defense_density','defense_density']] }
+  trend:{ fm: '', sliders: [['mod-trend_tf','sl-trend_tf','trend_tf'],['mod-ema_fast','sl-ema_fast','ema_fast'],['mod-ema_slow','sl-ema_slow','ema_slow'],['mod-trend_st_period','sl-trend_st_period','st_period'],['mod-trend_st_mult','sl-trend_st_mult','st_mult'],['mod-defense_density','sl-defense_density','defense_density']] }
 };
 
 function openParamModal(kind) {

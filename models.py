@@ -339,7 +339,6 @@ class GridState:
                 "ema_slow": getattr(self, "ema_slow", None),
                 "st_period": getattr(self, "st_period", None),
                 "st_mult": getattr(self, "st_mult", None),
-                "oi_n": None,
                 "current_density": getattr(self, "current_density", None),
                 "grid_spacing_pct": round(float(getattr(self, "grid_spacing_pct", 0.0) or 0.0), 3),
                 "grid_anchor_px": round(float(getattr(self, "grid_anchor_px", 0.0) or 0.0), 8),
