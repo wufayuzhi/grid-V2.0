@@ -3594,7 +3594,6 @@ async function onInstChange() {
   const chartInst = v;
   // 持久化浏览偏好（只影响下次打开行情栏默认，不影响交易模组）
   localStorage.setItem('last_inst', v.replace('-USDT-SWAP', ''));
-  document.getElementById('ctrl-inst').value = v.replace('-USDT-SWAP', '');
   try {
     await Promise.all([
       loadChartData('', false, false, chartInst),
