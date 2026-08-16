@@ -268,44 +268,57 @@ def _mode_base_density(st) -> float:
     return float(getattr(st, "base_density", 2.0) or 2.0)
 
 
-def _ladder_state(st, imbalance: float) -> str:
-    """收网状态机：off→net→cooldown（2026-08-16 批次C）。
+def _ladder_state(st, imbalance: float) -> int:
+    """收网状态机：档位级逐层进/退（2026-08-16 批次C2 重构）。
 
-    解决"失衡一掉回阈值就退出收网"的抖动 + "趋势反转反复进出"问题。
-      off      正常网格：失衡≥进网阈值(enter) → net
-      net      收网中：失衡≤退网阈值(exit) → cooldown(冷静期)
-      cooldown 冷静期(正常网格挂单)：失衡再≥enter → 重进 net；冷静期到 → off
-    进/退阈值差(enter>exit)制造滞回带防临界抖动；冷静期防趋势反转立刻又进网。
-    单边防御(失衡≥one_way_threshold)时强制收网(单向挂单本身处理，不影响本状态机)。
+    取代原二值 net/off 状态机，改为档位级（逐层进、逐层退）：
+      - 进网：由档位表本身定（失衡持续≥某档 → 进该档），逐层加深，每层带防抖(confirm_time)
+      - 退网：失衡持续<某档 → 逐层退到上一档，每层带防抖(confirm_time)
+      - 完全退出：失衡 < 最终退网阈值(exit_pct) → 彻底退出收网 → 进冷静期
+      - 冷静期：完全退出后N分钟(防趋势反转立刻又进)；期内失衡再升高→按档位重进；冷静期到→正常
+    返回当前生效档位索引（-1=未收网/冷静期）。
     """
     now = time.time()
-    enter = float(getattr(st, "ladder_enter_pct", 20.0) or 20.0)
+    confirm = float(getattr(st, "confirm_time", 30.0) or 30.0)
     exit_ = float(getattr(st, "ladder_exit_pct", 15.0) or 15.0)
     cd = float(getattr(st, "ladder_cooldown_min", 30.0) or 30.0) * 60.0
-    state = getattr(st, "_ladder_state", "off")
-    until = float(getattr(st, "_ladder_until", 0.0) or 0.0)
-    if state == "off":
-        if imbalance >= enter:
-            st._ladder_state = "net"
-            st._ladder_until = 0.0
-            return "net"
-        return "off"
-    if state == "net":
-        if imbalance <= exit_:
-            st._ladder_state = "cooldown"
-            st._ladder_until = now + cd
-            return "cooldown"
-        return "net"
-    # cooldown
-    if imbalance >= enter:
-        st._ladder_state = "net"
-        st._ladder_until = 0.0
-        return "net"
-    if now >= until:
-        st._ladder_state = "off"
-        st._ladder_until = 0.0
-        return "off"
-    return "cooldown"
+
+    rates = list(getattr(st, "ladder_rates", [40, 50, 60, 70, 80]) or [40, 50, 60, 70, 80])
+    enabled = list(getattr(st, "ladder_enabled", [True, True, True, True, True]) or [True, True, True, True, True])
+    # 当前失衡对应的最高启用档位索引（逐层进）
+    cur_tier = -1
+    for i, r in enumerate(rates):
+        if i < len(enabled) and enabled[i] and imbalance >= r:
+            cur_tier = i
+
+    cur_tier_s = getattr(st, "_ladder_tier", -1)
+    cand = getattr(st, "_ladder_debounce_cand", -1)
+    cand_ts = float(getattr(st, "_ladder_debounce_ts", 0.0) or 0.0)
+    cooldown_until = float(getattr(st, "_ladder_cooldown_until", 0.0) or 0.0)
+
+    # 完全退出：失衡 < 退网阈值 → 彻底退出 → 进冷静期
+    if imbalance < exit_:
+        if cur_tier_s >= 0:
+            st._ladder_tier = -1
+            st._ladder_cooldown_until = now + cd
+            st._ladder_debounce_cand = -1
+        return -1
+
+    # 冷静期：失衡已回升到档位区间，但冷静期未过 → 仍按冷静期处理（不重进），除非已过冷静期
+    if cooldown_until > now and cur_tier_s < 0:
+        # 冷静期内失衡即使≥某档也不重进，直到冷静期结束
+        return -1
+
+    # 进/退防抖：候选档位变化时启动防抖，持续 confirm 秒才切换
+    if cand != cur_tier:
+        st._ladder_debounce_cand = cur_tier
+        st._ladder_debounce_ts = now
+        return cur_tier_s  # 未确认，保持原档位
+    if now - cand_ts >= confirm:
+        st._ladder_tier = cur_tier
+        st._ladder_cooldown_until = 0.0
+        return cur_tier
+    return cur_tier_s
 
 
 def _ladder_gap(st, imbalance) -> tuple:
@@ -322,7 +335,7 @@ def _ladder_gap(st, imbalance) -> tuple:
       重仓=空头(多<空) → 重仓侧挂单在下方(开多平空) → 重仓价差→下端, 轻仓价差→上端
       重仓=多头(多>空) → 重仓侧挂单在上方(开空平多) → 重仓价差→上端, 轻仓价差→下端
     """
-    if _ladder_state(st, imbalance) != "net":
+    if _ladder_state(st, imbalance) < 0:
         return None, None
     rates = list(getattr(st, "ladder_rates", [40, 50, 60, 70, 80]) or [40, 50, 60, 70, 80])
     gheavy = list(getattr(st, "ladder_gap_up", [2.0, 1.5, 1.2, 1.0, 0.8]) or [2.0, 1.5, 1.2, 1.0, 0.8])
