@@ -268,18 +268,62 @@ def _mode_base_density(st) -> float:
     return float(getattr(st, "base_density", 2.0) or 2.0)
 
 
+def _ladder_state(st, imbalance: float) -> str:
+    """收网状态机：off→net→cooldown（2026-08-16 批次C）。
+
+    解决"失衡一掉回阈值就退出收网"的抖动 + "趋势反转反复进出"问题。
+      off      正常网格：失衡≥进网阈值(enter) → net
+      net      收网中：失衡≤退网阈值(exit) → cooldown(冷静期)
+      cooldown 冷静期(正常网格挂单)：失衡再≥enter → 重进 net；冷静期到 → off
+    进/退阈值差(enter>exit)制造滞回带防临界抖动；冷静期防趋势反转立刻又进网。
+    单边防御(失衡≥one_way_threshold)时强制收网(单向挂单本身处理，不影响本状态机)。
+    """
+    now = time.time()
+    enter = float(getattr(st, "ladder_enter_pct", 20.0) or 20.0)
+    exit_ = float(getattr(st, "ladder_exit_pct", 15.0) or 15.0)
+    cd = float(getattr(st, "ladder_cooldown_min", 30.0) or 30.0) * 60.0
+    state = getattr(st, "_ladder_state", "off")
+    until = float(getattr(st, "_ladder_until", 0.0) or 0.0)
+    if state == "off":
+        if imbalance >= enter:
+            st._ladder_state = "net"
+            st._ladder_until = 0.0
+            return "net"
+        return "off"
+    if state == "net":
+        if imbalance <= exit_:
+            st._ladder_state = "cooldown"
+            st._ladder_until = now + cd
+            return "cooldown"
+        return "net"
+    # cooldown
+    if imbalance >= enter:
+        st._ladder_state = "net"
+        st._ladder_until = 0.0
+        return "net"
+    if now >= until:
+        st._ladder_state = "off"
+        st._ladder_until = 0.0
+        return "off"
+    return "cooldown"
+
+
 def _ladder_gap(st, imbalance) -> tuple:
     """档位手填价差（重仓侧, 轻仓侧）→ 按当前重仓侧映射为 (上端, 下端)。
 
     2026-08-16 重构：档位表两列从「上端/下端」改为「重仓侧/轻仓侧」。
       ladder_gap_up  = 重仓侧价差（尽量少成交，挂远）
       ladder_gap_dn  = 轻仓侧价差（加速成交，挂近）
-    返回 (up_gap, dn_gap) 为按当前持仓映射后的上/下端百分比；未达任一档位返回 (None, None)。
+    2026-08-16 批次C：接入收网状态机(_ladder_state)。仅 net 状态返回收网价差；
+      off/cooldown 状态返回 (None, None) → 走正常网格。
+    返回 (up_gap, dn_gap) 为按当前持仓映射后的上/下端百分比；非收网态返回 (None, None)。
 
     映射规则（重仓侧决定挂单方向）：
       重仓=空头(多<空) → 重仓侧挂单在下方(开多平空) → 重仓价差→下端, 轻仓价差→上端
       重仓=多头(多>空) → 重仓侧挂单在上方(开空平多) → 重仓价差→上端, 轻仓价差→下端
     """
+    if _ladder_state(st, imbalance) != "net":
+        return None, None
     rates = list(getattr(st, "ladder_rates", [40, 50, 60, 70, 80]) or [40, 50, 60, 70, 80])
     gheavy = list(getattr(st, "ladder_gap_up", [2.0, 1.5, 1.2, 1.0, 0.8]) or [2.0, 1.5, 1.2, 1.0, 0.8])
     glight = list(getattr(st, "ladder_gap_dn", [1.0, 0.8, 0.7, 0.5, 0.4]) or [1.0, 0.8, 0.7, 0.5, 0.4])

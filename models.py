@@ -126,6 +126,10 @@ class GridState:
     ladder_gap_up: list = field(default_factory=lambda: [2.0, 1.5, 1.2, 1.0, 0.8])  # 档位重仓侧手填价差%(挂远少成交)
     ladder_gap_dn: list = field(default_factory=lambda: [1.0, 0.8, 0.7, 0.5, 0.4])  # 档位轻仓侧手填价差%(挂近加速成交)
     ladder_enabled: list = field(default_factory=lambda: [True, True, True, True, True])  # 档位是否启用(勾选)
+    # 收网状态机（2026-08-16 批次C）：进/退/冷静期
+    ladder_enter_pct: float = 20.0       # 进网阈值(%)：失衡≥此值进入密度网收网
+    ladder_exit_pct: float = 15.0        # 退网阈值(%)：失衡≤此值退出收网进冷静期（滞回带）
+    ladder_cooldown_min: float = 30.0    # 冷静期(分钟)：退网后按正常网格挂单，防趋势反转反复进出
     # bePx 防抖/紧急迟滞
     confirm_time: float = 30.0         # 确认时间 T(秒)
     exit_buffer: float = 5.0           # 退出缓冲(%)
@@ -324,6 +328,9 @@ class GridState:
                 "ladder_gap_up": list(self.ladder_gap_up),
                 "ladder_gap_dn": list(self.ladder_gap_dn),
                 "ladder_enabled": list(self.ladder_enabled),
+                "ladder_enter_pct": self.ladder_enter_pct,
+                "ladder_exit_pct": self.ladder_exit_pct,
+                "ladder_cooldown_min": self.ladder_cooldown_min,
                 "confirm_time": self.confirm_time,
                 "exit_buffer": self.exit_buffer,
                 "debounce_loss_line": self.debounce_loss_line,

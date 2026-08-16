@@ -99,6 +99,9 @@ def save_state():
         "ladder_gap_up": st.ladder_gap_up,
         "ladder_gap_dn": st.ladder_gap_dn,
         "ladder_enabled": st.ladder_enabled,
+        "ladder_enter_pct": getattr(st, "ladder_enter_pct", 20.0),
+        "ladder_exit_pct": getattr(st, "ladder_exit_pct", 15.0),
+        "ladder_cooldown_min": getattr(st, "ladder_cooldown_min", 30.0),
         "confirm_time": st.confirm_time,
         "exit_buffer": st.exit_buffer,
         "debounce_loss_line": st.debounce_loss_line,
@@ -234,6 +237,9 @@ def load_state() -> GridState:
         st.loss_ratio_tight1 = data.get("loss_ratio_tight1", 5.0)
         st.loss_ratio_tight2 = data.get("loss_ratio_tight2", 20.0)
         st.ladder_rates = data.get("ladder_rates", [40, 50, 60, 70, 80])
+        st.ladder_enter_pct = data.get("ladder_enter_pct", 20.0)
+        st.ladder_exit_pct = data.get("ladder_exit_pct", 15.0)
+        st.ladder_cooldown_min = data.get("ladder_cooldown_min", 30.0)
         # 兼容旧仓：读新字段 gap_up/gap_dn；旧仓仅有 ladder_densities → 从旧密度换算初始价差
         _old_dens = data.get("ladder_densities")
         if data.get("ladder_gap_up") is not None:

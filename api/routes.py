@@ -1683,6 +1683,7 @@ def register_routes(app: FastAPI):
                   "api_timeout", "health_stale_sec", "health_max_failures",
                   "use_dynamic_params", "base_density", "defense_density", "mode",
                   "one_way_threshold", "loss_ratio_tight1", "loss_ratio_tight2", "ladder_rates", "ladder_gap_up", "ladder_gap_dn", "ladder_enabled",
+                  "ladder_enter_pct", "ladder_exit_pct", "ladder_cooldown_min",
                   "confirm_time", "exit_buffer", "debounce_loss_line",
                   "debounce_profit_line", "atr_timeframe", "atr_period", "density_min",
                   "safety_flat_threshold",
