@@ -1166,6 +1166,9 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
           <div class="sl-row"><span>挂单间隔下限</span><span class="sl-val" id="sl-density_min">0.6</span></div>
           <input type="range" class="mod-slider" id="mod-density_min" min="0.3" max="2.0" step="0.1" value="0.6" oninput="onModChange('density_min',this)">
           <div class="pm-note">实际挂单间隔%下限，间隔=ATR%×密度；保证 ≥此值 且 ≥双向手续费</div>
+          <div class="sl-row"><span>后备间距(ATR未就绪时)</span><span class="sl-val" id="sl-target_spacing_pct">0.60</span></div>
+          <input type="range" class="mod-slider" id="mod-target_spacing_pct" min="0.2" max="2.0" step="0.05" value="0.60" oninput="onModChange('target_spacing_pct',this)">
+          <div class="pm-note">ATR数据未就绪/不可用时作为挂单间距回退；ATR正常时用 ATR%×密度</div>
           <div class="sl-row"><span>调仓比例</span><span class="sl-val" id="sl-adj_ratio">0.06</span></div>
           <input type="range" class="mod-slider" id="mod-adj_ratio" min="0.01" max="0.30" step="0.01" value="0.06" oninput="onModChange('adj_ratio',this)">
           <div class="pm-note">每次网格成交换仓 = 总张数×调仓比例÷2；建议值 = 安全系数×10</div>
@@ -2343,13 +2346,11 @@ async function refresh() {
         ['mod-bleed_threshold_pct','bleed_threshold_pct'],
         ['mod-target_spacing_pct','target_spacing_pct'],
         ['mod-adj_ratio','adj_ratio'],
-        ['mod-price_offset_pct','price_offset_pct'],
         ['mod-imbalance_threshold_pct','imbalance_threshold_pct'],
         ['mod-oi_full_refresh_interval','oi_full_refresh_interval'],
         ['mod-iceberg_sz','iceberg_sz'],
         ['mod-pxVar','pxVar'],
         ['mod-rebalance_target_pct','rebalance_target_pct'],
-        ['mod-adjust_split_ratio','adjust_split_ratio'],
         ['mod-tp_base_pct','tp_base_pct'],
         ['mod-tp_window_hours','tp_window_hours'],
         ['mod-bleed_window_sec','bleed_window_sec'],
@@ -2675,16 +2676,12 @@ function buildCalcDetails(S) {
   const gridCap = p.grid_available || S.grid_available || 0;
   const totalEq = S.total_equity || 0;
   const reservedCap = S.reserved_capital || p.reserved || 0;
-  const safetyFactor = p.effective_safety_factor || 0.5;
+  const safetyFactor = p.safety_factor || S.safety_factor || 0.7;
   const coinAmp = p.coin_amplitude_24h || S.coin_amplitude_24h || 0;
   const dr = p.dr_composite || S.dr_composite || 0;
   const fDr = 1.0 + 3.0 * dr;
   const spacing = p.grid_spacing_pct || S.grid_spacing_pct || 0;
   const targetSpacing = p.target_spacing_pct || 0;
-  const riskPct = p.risk_threshold_pct || S.risk_threshold_pct || 0;
-  const warnPct = p.warning_threshold_pct || S.warning_threshold_pct || 0;
-  const warnBuf = p.warning_buffer_pct || S.warning_buffer_pct || 0;
-  const useDyn = p.use_dynamic_params !== undefined ? p.use_dynamic_params : S.use_dynamic_params;
   const effWarn = p.effective_warning_ratio || S.effective_warning_ratio || 0;
   const effRisk = p.effective_risk_ratio || S.effective_risk_ratio || 0;
   const effBleed = p.effective_bleed_threshold || S.effective_bleed_threshold || 0;
@@ -2716,20 +2713,11 @@ function buildCalcDetails(S) {
     };
   }
 
-  // ② risk_threshold
-  const bufDisp = warnBuf > 0 ? warnBuf.toFixed(2) + '%' : '—';
-  cd.risk_threshold = {
-    id: 'risk_threshold', icon: '⚖️', title: '预警阈值',
-    formula: '预警缓冲带=振幅×f_dr×f_imbalance×lev_scale, 预警阈值=风控线+缓冲带',
-    vars: `振幅=${coinAmp.toFixed(1)}%, DR=${dr.toFixed(3)}, f_dr=${fDr.toFixed(3)}, 失衡率=${imbalanceRate.toFixed(1)}%, f_imb=${fImb.toFixed(3)}, lev_scale=${levScale.toFixed(2)}, 缓冲带=${bufDisp}, 风控线=${riskPct.toFixed(2)}%`,
-    result: `预警阈值=${warnPct.toFixed(2)}%, 风控阈值=${riskPct.toFixed(2)}%`
-  };
-
-  // ③ grid_spacing
+  // ② grid_spacing
   cd.grid_spacing = {
     id: 'grid_spacing', icon: '📐', title: '网格间距',
-    formula: '网格间距 = 振幅 × base_ratio × (1 + 3×DR)',
-    vars: `振幅=${coinAmp.toFixed(1)}%, DR=${dr.toFixed(3)}, f_dr=${fDr.toFixed(3)}, 基准间距=${targetSpacing.toFixed(2)}%`,
+    formula: '网格间距 = ATR% × 密度（并钳制 ≥ 挂单间隔下限% 且 ≥ 双向费率）',
+    vars: `ATR%=${(p.atr_pct||S.atr_pct||0).toFixed(3)}, 密度=${(p.base_density||S.base_density||2.0).toFixed(2)}, 间隔下限=${(p.density_min||S.density_min||0.6).toFixed(2)}%`,
     result: `实际间距=${spacing.toFixed(2)}%`
   };
 
@@ -2747,9 +2735,9 @@ function buildCalcDetails(S) {
   // ⑤ effective_params
   cd.effective_params = {
     id: 'effective_params', icon: '🛡️', title: '有效参数',
-    formula: '有效安全系数/预警比/风控比 (动态模式=公式计算, 静态模式=滑块值)',
-    vars: `use_dynamic=${useDyn}, DR=${dr.toFixed(3)}, 杠杆=${lev}倍`,
-    result: `安全系数=${safetyFactor.toFixed(2)}, 预警比=${effWarn.toFixed(2)}, 风控比=${effRisk.toFixed(2)}, 失血熔断=${effBleed.toFixed(2)}%`
+    formula: '有效安全系数（建仓余量因子）',
+    vars: `安全系数=${safetyFactor.toFixed(3)}`,
+    result: `安全系数=${safetyFactor.toFixed(2)}, 杠杆=${lev}倍`
   };
 
   // ⑥ iceberg (for tooltip)
@@ -2774,7 +2762,7 @@ function updateFormulaPanel() {
     return;
   }
   let html = '';
-  const keys = ['position_calc', 'grid_spacing', 'safety_distance', 'risk_threshold', 'effective_params'];
+  const keys = ['position_calc', 'grid_spacing', 'safety_distance', 'effective_params'];
   keys.forEach(k => {
     const item = cd[k];
     if (!item) return;
@@ -2829,7 +2817,7 @@ function updateInlineFormulas() {
   let cd = S.calc_details;
   if (!cd || !Object.keys(cd).length) cd = buildCalcDetails(S);
   if (!cd) return;
-  ['position_calc','effective_params','grid_spacing','safety_distance','risk_threshold','iceberg'].forEach(function(k) {
+  ['position_calc','effective_params','grid_spacing','safety_distance','iceberg'].forEach(function(k) {
     const el = document.getElementById('fm-' + k);
     if (!el) return;
     const item = cd[k];
@@ -3413,6 +3401,9 @@ async function doBuild() {
       await apiPost(API_BASE + '/api/v1/grid/instid', { inst_id: inst });
     }
     try { await apiPost(API_BASE + '/api/v1/account/set-leverage', { leverage: lev }); } catch (e) { /* 模拟盘可能失败 */ }
+    // 提交当前安全系数（开仓弹窗滑块可能未走 saveAllParams 确认，需在此 flush，保证建仓用当前滑块值）
+    const sfInput = document.getElementById('sf-slider');
+    if (sfInput) { await apiPost(API_BASE + '/api/v1/config/params', { safety_factor: parseInt(sfInput.value) / 100 }); }
     await apiPost(API_BASE + '/api/v1/config/params', { leverage: lev });
     const r = await apiPost(API_BASE + '/api/v1/grid/start', { contracts: initContracts });
     if (r && r.status === 'error') {
@@ -3737,7 +3728,7 @@ const PM_KEYS = {
   trend:['trend_tf','ema_fast','ema_slow','st_period','st_mult','defense_density']
 };
 const PM_MAP = {
-  grid: { fm: 'pm-fm-grid_spacing', sliders: [['mod-base_density','sl-base_density','base_density'],['mod-density_min','sl-density_min','density_min'],['mod-atr_timeframe','sl-atr_timeframe','atr_timeframe'],['mod-atr_period','sl-atr_period','atr_period']] },
+  grid: { fm: 'pm-fm-grid_spacing', sliders: [['mod-base_density','sl-base_density','base_density'],['mod-density_min','sl-density_min','density_min'],['mod-target_spacing_pct','sl-target_spacing_pct','target_spacing_pct'],['mod-atr_timeframe','sl-atr_timeframe','atr_timeframe'],['mod-atr_period','sl-atr_period','atr_period']] },
   risk: { fm: 'pm-fm-effective_params', sliders: [['mod-safety_factor','sl-safety_factor','safety_factor'],['mod-safety_flat_threshold','sl-safety_flat_threshold','safety_flat_threshold']] },
   imb:  { fm: '', sliders: [['mod-imbalance_threshold_pct','sl-imbalance_threshold_pct','imbalance_threshold_pct'],['mod-rebalance_target_pct','sl-rebalance_target_pct','rebalance_target_pct'],['mod-rebalance_batches','sl-rebalance_batches','rebalance_batches'],['mod-rebalance_batch_gap_min','sl-rebalance_batch_gap_min','rebalance_batch_gap_min'],['mod-rebalance_limit_timeout_min','sl-rebalance_limit_timeout_min','rebalance_limit_timeout_min'],['mod-one_way_threshold','sl-one_way_threshold','one_way_threshold'],['mod-loss_ratio_tight1','sl-loss_ratio_tight1','loss_ratio_tight1'],['mod-loss_ratio_tight2','sl-loss_ratio_tight2','loss_ratio_tight2'],['mod-ladder_exit_pct','sl-ladder_exit_pct','ladder_exit_pct'],['mod-ladder_cooldown_min','sl-ladder_cooldown_min','ladder_cooldown_min'],['mod-confirm_time','sl-confirm_time','confirm_time'],['mod-debounce_loss_line','sl-debounce_loss_line','debounce_loss_line'],['mod-debounce_profit_line','sl-debounce_profit_line','debounce_profit_line']] },
   ice:  { fm: 'pm-fm-iceberg', sliders: [['mod-iceberg_sz','sl-iceberg_sz','iceberg_sz'],['mod-pxVar','sl-pxVar','pxVar']] },
@@ -4016,7 +4007,7 @@ async function saveAllParams() {
   // ② 档位类（one_way_threshold/ladder_rates/ladder_densities）→ 只有当前失衡率 ≥ 档位才需确认
   // ③ 风控/冰山/失血/其它 → 不触发重挂，不需确认
   const gridKeys = ['adj_ratio','base_density','defense_density','density_min',
-                    'atr_timeframe','atr_period'];
+                    'atr_timeframe','atr_period','target_spacing_pct'];
   const ladderKeys = ['one_way_threshold','ladder_rates','ladder_gap_up','ladder_gap_dn'];
   const touchedGrid = gridKeys.some(k => params[k] !== undefined && (k in _pendingChanges));
   const curImb = (S && S.imbalance_rate !== undefined ? S.imbalance_rate : 0);
@@ -4045,24 +4036,21 @@ function applyPreset(type, el) {
       target_spacing_pct: 0.40, adj_ratio: 0.04,
       imbalance_threshold_pct: 10,
       iceberg_sz: 1, pxVar: 1.5,
-      tp_base_pct: 1.5, tp_window_hours: 24, rebalance_target_pct: 8,
-      adjust_split_ratio: 0.40
+      tp_base_pct: 1.5, tp_window_hours: 24, rebalance_target_pct: 8
     },
     standard: {
       safety_factor: 0.70, bleed_threshold_pct: 3,
       target_spacing_pct: 0.60, adj_ratio: 0.06,
       imbalance_threshold_pct: 20,
       iceberg_sz: 2, pxVar: 1.0,
-      tp_base_pct: 1.0, tp_window_hours: 24, rebalance_target_pct: 10,
-      adjust_split_ratio: 0.50
+      tp_base_pct: 1.0, tp_window_hours: 24, rebalance_target_pct: 10
     },
     aggressive: {
       safety_factor: 0.45, bleed_threshold_pct: 2,
       target_spacing_pct: 0.85, adj_ratio: 0.10,
       imbalance_threshold_pct: 35,
       iceberg_sz: 4, pxVar: 0.8,
-      tp_base_pct: 0.8, tp_window_hours: 24, rebalance_target_pct: 12,
-      adjust_split_ratio: 0.60
+      tp_base_pct: 0.8, tp_window_hours: 24, rebalance_target_pct: 12
     }
   };
   const p = presets[type];

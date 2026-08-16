@@ -544,7 +544,7 @@ def calc_grid_levels(st) -> tuple[float, float]:
             atr_pct = atr / anchor * 100
             if atr_pct > 0:
                 fee_pct = 0.001  # 单边费率占位（0.1%），双向 2×
-                spacing_min = float(getattr(st, "density_min", 0.3) or 0.3)  # 用户设的间隔下限%
+                spacing_min = float(getattr(st, "density_min", 0.6) or 0.6)  # 用户设的间隔下限%
                 spacing_min = max(spacing_min, 2 * fee_pct * 100)  # 至少覆盖双向手续费
                 # 间隔 = atr_pct × density ≥ spacing_min → density ≥ spacing_min / atr_pct
                 density = max(density, spacing_min / atr_pct)
@@ -977,7 +977,7 @@ def _refresh_grid_display(st) -> None:
                 atr_pct = atr / anchor * 100
                 if atr_pct > 0:
                     fee_pct = 0.001  # 单边费率 0.1%
-                    spacing_min = float(getattr(st, "density_min", 0.3) or 0.3)
+                    spacing_min = float(getattr(st, "density_min", 0.6) or 0.6)
                     spacing_min = max(spacing_min, 2 * fee_pct * 100)
                     _density_disp = max(_density_disp, spacing_min / atr_pct)
                     spacing = grid_spacing_pct(atr, anchor, _density_disp)

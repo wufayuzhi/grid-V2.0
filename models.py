@@ -98,19 +98,15 @@ class GridState:
     # 网格
     target_spacing_pct: float = 0.60
     adj_ratio: float = 0.06
-    price_offset_pct: float = 0.2
-    adjust_split_ratio: float = 0.5
     # 冰山
     iceberg_sz: int = 2
     pxVar: float = 1.0
     # 开关
-    auto_adjust: bool = True
     grid_auto_run: bool = True   # 网格自动运行（挂单）总开关，与失衡率解耦（2026-08-14）
     use_iceberg: bool = True
     use_risk_control: bool = True
     use_bleed_melt: bool = True
     use_safety_flat: bool = True                # 安全距离全平保险开关(2026-08-15新增,默认开)
-    use_dynamic_params: bool = True
     # 失衡回补(B)开关：默认关=以A(挂单调价格/单边防堆仓)为主，失衡靠盈亏平衡点抬升渐进化解；
     # 开启时才在失衡>阈值时市价减重仓侧(主动砍仓)，默认停用(用户2026-08定案)
     use_rebalance: bool = False
@@ -282,7 +278,6 @@ class GridState:
                 "single_limit": self.single_limit,
                 "iceberg_sz": self.iceberg_sz,
                 "pxVar": self.pxVar,
-                "auto_adjust": self.auto_adjust,
                 "use_iceberg": self.use_iceberg,
                 "use_risk_control": self.use_risk_control,
                 "use_bleed_melt": self.use_bleed_melt,
@@ -296,8 +291,6 @@ class GridState:
                 "rebalance_batch_gap_min": self.rebalance_batch_gap_min,
                 "rebalance_limit_timeout_min": self.rebalance_limit_timeout_min,
                 "rebalance_market_after_timeout": self.rebalance_market_after_timeout,
-                "price_offset_pct": self.price_offset_pct,
-                "adjust_split_ratio": self.adjust_split_ratio,
                 "data_loop_interval": self.data_loop_interval,
                 "oi_full_refresh_interval": self.oi_full_refresh_interval,
                 "oi_history_size": self.oi_history_size,
@@ -312,7 +305,6 @@ class GridState:
                 "dr_7d": round(self.dr_7d, 3),
                 "atr_abs": round(self.atr_abs, 2),
                 "atr_pct": round(self.atr_pct, 3),
-                "use_dynamic_params": self.use_dynamic_params,
                 "target_spacing_pct": self.target_spacing_pct,
                 "adj_ratio": self.adj_ratio,
                 "base_density": self.base_density,

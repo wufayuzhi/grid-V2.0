@@ -89,8 +89,6 @@ def save_state():
         "bleed_threshold_pct": st.bleed_threshold_pct,
         "target_spacing_pct": st.target_spacing_pct,
         "adj_ratio": st.adj_ratio,
-        "price_offset_pct": st.price_offset_pct,
-        "adjust_split_ratio": st.adjust_split_ratio,
         "base_density": st.base_density,
         "defense_density": st.defense_density,
         "mode": st.mode,
@@ -122,13 +120,11 @@ def save_state():
         "st_mult": st.st_mult,
         "iceberg_sz": st.iceberg_sz,
         "pxVar": st.pxVar,
-        "auto_adjust": st.auto_adjust,
         "grid_auto_run": st.grid_auto_run,
         "use_iceberg": st.use_iceberg,
         "use_risk_control": st.use_risk_control,
         "use_bleed_melt": st.use_bleed_melt,
         "use_safety_flat": st.use_safety_flat,
-        "use_dynamic_params": st.use_dynamic_params,
         "coin_amplitude_24h": st.coin_amplitude_24h,
         "amp_7d": st.amp_7d,
         "dr_24h": st.dr_24h,
@@ -228,8 +224,6 @@ def load_state() -> GridState:
         st.bleed_threshold_pct = data.get("bleed_threshold_pct", 3.0)
         st.target_spacing_pct = data.get("target_spacing_pct", 0.60)
         st.adj_ratio = data.get("adj_ratio", 0.06)
-        st.price_offset_pct = data.get("price_offset_pct", 0.2)
-        st.adjust_split_ratio = data.get("adjust_split_ratio", 0.5)
         st.base_density = data.get("base_density", 2.0)
         st.defense_density = data.get("defense_density", 2.0)
         st.mode = data.get("mode", "attack")
@@ -260,7 +254,7 @@ def load_state() -> GridState:
         st.debounce_profit_line = data.get("debounce_profit_line", 0.2)
         st.atr_timeframe = data.get("atr_timeframe", "1H")
         st.atr_period = data.get("atr_period", 24)
-        st.density_min = data.get("density_min", 0.3)
+        st.density_min = data.get("density_min", 0.6)
         st.cumulative_added = data.get("cumulative_added", 0.0)
         st.safety_flat_threshold = data.get("safety_flat_threshold", 5.0)
         st.auto_rebuild_blocked = data.get("auto_rebuild_blocked", False)
@@ -274,13 +268,11 @@ def load_state() -> GridState:
         st.st_mult = data.get("st_mult", 3.0)
         st.iceberg_sz = data.get("iceberg_sz", 2)
         st.pxVar = data.get("pxVar", 1.0)
-        st.auto_adjust = data.get("auto_adjust", True)
         st.grid_auto_run = data.get("grid_auto_run", True)
         st.use_iceberg = data.get("use_iceberg", True)
         st.use_risk_control = data.get("use_risk_control", True)
         st.use_bleed_melt = data.get("use_bleed_melt", True)
         st.use_safety_flat = data.get("use_safety_flat", True)
-        st.use_dynamic_params = data.get("use_dynamic_params", True)
         st.coin_amplitude_24h = data.get("coin_amplitude_24h", 0)
         st.amp_7d = data.get("amp_7d", 0)
         st.dr_24h = data.get("dr_24h", 0)
