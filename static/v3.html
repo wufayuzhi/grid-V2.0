@@ -1081,7 +1081,7 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
       <div class="pm-group" id="pmg-risk">
         <div class="pm-left">
           <div class="sl-row"><span>安全系数</span><span class="sl-val" id="sl-safety_factor">0.70</span></div>
-          <input type="range" class="mod-slider" id="mod-safety_factor" min="0.30" max="0.90" step="0.05" value="0.70" oninput="onModChange('safety_factor',this)">
+          <input type="range" class="mod-slider" id="mod-safety_factor" min="0.30" max="0.90" step="0.05" value="0.70" oninput="onSafetyFactorModChange(this)">
           <div class="pm-note">建仓张数 = 单边极限 × 安全系数（留安全余量）</div>
           <div class="pm-div"></div>
           <div class="sw-row"><label><input type="checkbox" id="mod-use_safety_flat" checked onchange="onModBoolChange('use_safety_flat',this)"> 安全距离全平（强平空间兜底）</label></div>
@@ -2297,9 +2297,11 @@ async function fetchPrecheck() {
     const totEq = S.total_equity || 0;
     const gridAvail = S.grid_available || 0;
     const px = pc.mark_px || 1;
-    // 安全系数 = 滑块值（0.10~1.00）
+    // 安全系数 = 单一来源后端 safety_factor（开仓弹窗滑块初始同步为后端值）
+    const backSf = (S.params && S.params.safety_factor) || 0.7;
     const sfSlider = document.getElementById('sf-slider');
-    const sf = sfSlider ? parseInt(sfSlider.value) / 100 : 0.6;
+    if (sfSlider) sfSlider.value = Math.round(backSf * 100);
+    const sf = backSf;
     document.getElementById('ctrl-sf').textContent = sf.toFixed(2);
     // 交易所最大 = 直接拉 OKX 数据（不自己算）
     const exchMax = pc.max_ct || 0;
@@ -2984,8 +2986,26 @@ function onLevChange() {
 // ── Safety factor slider ──
 function onSafetyChange() {
   const v = parseInt(document.getElementById('sf-slider').value);
-  document.getElementById('ctrl-sf').textContent = (v/100).toFixed(2);
+  const sf = v / 100;
+  document.getElementById('ctrl-sf').textContent = sf.toFixed(2);
+  // 同步风控弹窗滑块 + 手机端显示 + 写回后端（单一来源 safety_factor）
+  const modSf = document.getElementById('mod-safety_factor');
+  if (modSf) modSf.value = (sf * 100).toFixed(0);
+  const mobSf = document.getElementById('mob-sf-val');
+  if (mobSf) mobSf.textContent = sf.toFixed(2);
+  _pendingChanges['safety_factor'] = sf;
   fetchPrecheck();
+}
+// 风控弹窗安全系数滑块 → 同步开仓弹窗 sf-slider + 手机端（单一来源联动）
+function onSafetyFactorModChange(el) {
+  const sf = parseFloat(el.value);
+  const sfSlider = document.getElementById('sf-slider');
+  if (sfSlider) sfSlider.value = Math.round(sf * 100);
+  const ctrl = document.getElementById('ctrl-sf');
+  if (ctrl) ctrl.textContent = sf.toFixed(2);
+  const mobSf = document.getElementById('mob-sf-val');
+  if (mobSf) mobSf.textContent = sf.toFixed(2);
+  onModChange('safety_factor', el);
 }
 
 // ── Init position manual input ──
