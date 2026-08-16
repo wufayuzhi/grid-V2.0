@@ -2984,17 +2984,25 @@ function onLevChange() {
 }
 
 // ── Safety factor slider ──
+// 防抖：拖动瞬间只同步本地三处显示（秒变），停止300ms后才请求后端刷新建仓预览
+let _safetyDebounceTimer = null;
+function debouncedFetchPrecheck() {
+  clearTimeout(_safetyDebounceTimer);
+  _safetyDebounceTimer = setTimeout(() => {
+    try { fetchPrecheck(); } catch(e){}
+  }, 300);
+}
 function onSafetyChange() {
   const v = parseInt(document.getElementById('sf-slider').value);
   const sf = v / 100;
   document.getElementById('ctrl-sf').textContent = sf.toFixed(2);
-  // 同步风控弹窗滑块 + 手机端显示 + 写回后端（单一来源 safety_factor）
+  // 同步风控弹窗滑块 + 手机端显示 + 写回后端（单一来源 safety_factor）——本地即时，不等网络
   const modSf = document.getElementById('mod-safety_factor');
   if (modSf) modSf.value = (sf * 100).toFixed(0);
   const mobSf = document.getElementById('mob-sf-val');
   if (mobSf) mobSf.textContent = sf.toFixed(2);
   _pendingChanges['safety_factor'] = sf;
-  fetchPrecheck();
+  debouncedFetchPrecheck();
 }
 // 风控弹窗安全系数滑块 → 同步开仓弹窗 sf-slider + 手机端（单一来源联动）
 function onSafetyFactorModChange(el) {
@@ -3006,6 +3014,7 @@ function onSafetyFactorModChange(el) {
   const mobSf = document.getElementById('mob-sf-val');
   if (mobSf) mobSf.textContent = sf.toFixed(2);
   onModChange('safety_factor', el);
+  debouncedFetchPrecheck();
 }
 
 // ── Init position manual input ──
