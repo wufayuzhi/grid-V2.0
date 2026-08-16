@@ -119,11 +119,17 @@ def check_adjust(st=None):
     # 触发值/目标值均为 0-100 滑块；目标必须 < 触发（routes 已校验）。
     trigger = float(getattr(st, "imbalance_threshold_pct", 80.0) or 80.0)
     target = float(getattr(st, "rebalance_target_pct", 40.0) or 40.0)
-    if getattr(st, "use_rebalance", False) and imbalance >= trigger:
+    # 回补进行中标记：一旦启动（_rebalance_active=True），不管失衡降到多少都坚持把剩余批次补完，
+    # 直到全部批次完成或失衡 ≤ 目标，才能结束本轮（修复"批1执行后失衡回落 → 后续批次永不执行"的不收敛）。
+    rebal_active = getattr(st, "_rebalance_active", False)
+    if getattr(st, "use_rebalance", False) and rebal_active:
+        _do_rebalance(st, imbalance, target, _start_new_round=False)
+    elif getattr(st, "use_rebalance", False) and imbalance >= trigger:
         _do_rebalance(st, imbalance, target, _start_new_round=True)
     # 失衡已回到目标以下 → 本轮回补完成（下次失衡再超触发时计为新的一轮）
     elif getattr(st, "use_rebalance", False) and imbalance <= target:
         st.rebalance_complete = True
+        st._rebalance_active = False
 
 
 def _do_rebalance(st, imbalance, target, _start_new_round=False):
@@ -157,6 +163,17 @@ def _do_rebalance(st, imbalance, target, _start_new_round=False):
     if per_batch <= 0:
         return
 
+    # 续批中但已达标（失衡已 ≤ 目标）→ 提前结束本轮，不再过补（防补过头）
+    if not _start_new_round and need_total == 0:
+        st._rebalance_cur_batch = 0
+        st._rebalance_batch_ts = 0.0
+        st._rebalance_active = False
+        st.rebalance_complete = True
+        st.rebalance_cnt = (getattr(st, "rebalance_cnt", 0) or 0) + 1
+        st._need_rehang = True
+        save_state_lazy(st)
+        return
+
     from engine.trader import rebalance_batch
 
     # ── 分批状态机：检查是否有未完成批次 ──
@@ -166,7 +183,8 @@ def _do_rebalance(st, imbalance, target, _start_new_round=False):
     timeout_min = float(getattr(st, "rebalance_limit_timeout_min", 10.0) or 10.0)
 
     if cur_batch == 0:
-        # 新一轮：执行批1（限价）
+        # 新一轮：执行批1（限价），并标记"回补进行中"（坚持补完不半路停）
+        st._rebalance_active = True
         r = rebalance_batch(heavy, per_batch, use_limit=True)
         if r.get("status") != "ok":
             return
@@ -211,6 +229,7 @@ def _do_rebalance(st, imbalance, target, _start_new_round=False):
     if cur_batch >= batches:
         st._rebalance_cur_batch = 0
         st._rebalance_batch_ts = 0.0
+        st._rebalance_active = False  # 本轮回补结束，恢复"失衡≥触发才启动新一轮"
         st.rebalance_complete = True
         st.rebalance_cnt = (getattr(st, "rebalance_cnt", 0) or 0) + 1
         st._need_rehang = True  # 网格重挂用新持仓重算锚点

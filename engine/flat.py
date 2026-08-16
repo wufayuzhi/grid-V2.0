@@ -93,6 +93,14 @@ def execute_emergency(st=None, reason: str = "手动全平") -> dict:
                                  level="ERROR")
                     except Exception as e:
                         _log(st, f"  ⚠️ 平{ps}异常: {e}", level="WARN")
+        # 全平必须"所有需要平的仓位都成功"才算成功（修复：一侧失败仍报"全平完成"的安全误报）
+        if closed != set(tasks):
+            failed = sorted(set(tasks) - closed)
+            _log(st, f"🚨 [全平] 部分失败: {','.join(failed)} 侧未平掉 → 返回失败(勿当全平成功)",
+                 level="ERROR", cat="FLAT")
+            save_state()
+            return {"status": "error",
+                    "msg": f"全平未完成: {','.join(failed)} 侧平仓失败，账户仍留有敞口"}
         # 只清零已成功平仓的仓位
         if 'long' in closed:
             pos.long_contracts = 0
