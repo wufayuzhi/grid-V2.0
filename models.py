@@ -132,7 +132,6 @@ class GridState:
     ladder_cooldown_min: float = 30.0    # 冷静期(分钟)：退网后按正常网格挂单，防趋势反转反复进出
     # bePx 防抖/紧急迟滞
     confirm_time: float = 30.0         # 确认时间 T(秒)
-    exit_buffer: float = 5.0           # 退出缓冲(%)
     debounce_loss_line: float = -0.5   # 防抖·亏损线(%)
     debounce_profit_line: float = 0.2  # 防抖·盈利线(%)
     # ATR 参数
@@ -332,7 +331,6 @@ class GridState:
                 "ladder_exit_pct": self.ladder_exit_pct,
                 "ladder_cooldown_min": self.ladder_cooldown_min,
                 "confirm_time": self.confirm_time,
-                "exit_buffer": self.exit_buffer,
                 "debounce_loss_line": self.debounce_loss_line,
                 "debounce_profit_line": self.debounce_profit_line,
                 "atr_timeframe": self.atr_timeframe,

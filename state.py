@@ -103,7 +103,6 @@ def save_state():
         "ladder_exit_pct": getattr(st, "ladder_exit_pct", 15.0),
         "ladder_cooldown_min": getattr(st, "ladder_cooldown_min", 30.0),
         "confirm_time": st.confirm_time,
-        "exit_buffer": st.exit_buffer,
         "debounce_loss_line": st.debounce_loss_line,
         "debounce_profit_line": st.debounce_profit_line,
         "atr_timeframe": st.atr_timeframe,
@@ -257,7 +256,6 @@ def load_state() -> GridState:
         # 兼容旧仓(无 ladder_enabled)：默认全启用
         st.ladder_enabled = data.get("ladder_enabled", [True, True, True, True, True])
         st.confirm_time = data.get("confirm_time", 30.0)
-        st.exit_buffer = data.get("exit_buffer", 5.0)
         st.debounce_loss_line = data.get("debounce_loss_line", -0.5)
         st.debounce_profit_line = data.get("debounce_profit_line", 0.2)
         st.atr_timeframe = data.get("atr_timeframe", "1H")
