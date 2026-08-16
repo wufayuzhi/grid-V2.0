@@ -93,6 +93,8 @@ def save_state():
         "defense_density": st.defense_density,
         "mode": st.mode,
         "one_way_threshold": st.one_way_threshold,
+        "loss_ratio_tight1": getattr(st, "loss_ratio_tight1", 5.0),
+        "loss_ratio_tight2": getattr(st, "loss_ratio_tight2", 20.0),
         "ladder_rates": st.ladder_rates,
         "ladder_gap_up": st.ladder_gap_up,
         "ladder_gap_dn": st.ladder_gap_dn,
@@ -229,6 +231,8 @@ def load_state() -> GridState:
         st.defense_density = data.get("defense_density", 2.0)
         st.mode = data.get("mode", "attack")
         st.one_way_threshold = data.get("one_way_threshold", 60.0)
+        st.loss_ratio_tight1 = data.get("loss_ratio_tight1", 5.0)
+        st.loss_ratio_tight2 = data.get("loss_ratio_tight2", 20.0)
         st.ladder_rates = data.get("ladder_rates", [40, 50, 60, 70, 80])
         # 兼容旧仓：读新字段 gap_up/gap_dn；旧仓仅有 ladder_densities → 从旧密度换算初始价差
         _old_dens = data.get("ladder_densities")

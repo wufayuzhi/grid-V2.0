@@ -1131,8 +1131,13 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
           <div class="pm-note">勾选=限价超时未成交→转市价兜底(保证回补完成)；不勾选=只挂限价等成交</div>
           <div class="pm-div"></div>
           <div class="sl-row"><span>单向成交阈值%</span><span class="sl-val" id="sl-one_way_threshold">60</span></div>
-          <input type="range" class="mod-slider" id="mod-one_way_threshold" min="30" max="90" step="1" value="60" oninput="onModChange('one_way_threshold',this)">
-          <div class="pm-note">失衡 ≥ 此% 时只平重仓侧（单向成交+紧急拆墙唯一开关）</div>
+          <input type="range" class="mod-slider" id="mod-one_way_threshold" min="10" max="90" step="1" value="60" oninput="onModChange('one_way_threshold',this)">
+          <div class="pm-note">失衡 ≥ 此% 时只平重仓侧（单向机制，贴价按下方净浮亏比例）</div>
+          <div class="sl-row"><span>贴价阈值1%</span><span class="sl-val" id="sl-loss_ratio_tight1">5</span></div>
+          <input type="range" class="mod-slider" id="mod-loss_ratio_tight1" min="1" max="15" step="0.5" value="5" oninput="onModChange('loss_ratio_tight1',this)">
+          <div class="sl-row"><span>贴价阈值2%</span><span class="sl-val" id="sl-loss_ratio_tight2">20</span></div>
+          <input type="range" class="mod-slider" id="mod-loss_ratio_tight2" min="10" max="50" step="1" value="20" oninput="onModChange('loss_ratio_tight2',this)">
+          <div class="pm-note">净浮亏占网格可用 ≤阈值1保本夹逼 / ≥阈值2贴最近急平 / 中间连续渐近（亏越多贴越近）</div>
           <div class="pm-div"></div>
           <div class="pm-sub">档位表（收网手填价差，2026-08-16重构）<span style="font-weight:400;color:var(--t3)">☑勾选=启用该档；重仓侧价差=挂远少成交，轻仓侧价差=挂近加速成交，强制≥0.3%；引擎按当前多空谁重自动套到对应侧</span></div>
           <datalist id="ladder-dens-list">
@@ -2060,6 +2065,8 @@ async function refresh() {
         ['mod-safety_flat_threshold','safety_flat_threshold'],
         // 失衡监控组
         ['mod-one_way_threshold','one_way_threshold'],
+        ['mod-loss_ratio_tight1','loss_ratio_tight1'],
+        ['mod-loss_ratio_tight2','loss_ratio_tight2'],
         ['mod-confirm_time','confirm_time'],
         ['mod-exit_buffer','exit_buffer'],
         ['mod-debounce_loss_line','debounce_loss_line'],
@@ -3407,7 +3414,7 @@ const PM_KEYS = {
 const PM_MAP = {
   grid: { fm: 'pm-fm-grid_spacing', sliders: [['mod-base_density','sl-base_density','base_density'],['mod-density_min','sl-density_min','density_min'],['mod-atr_timeframe','sl-atr_timeframe','atr_timeframe'],['mod-atr_period','sl-atr_period','atr_period']] },
   risk: { fm: 'pm-fm-effective_params', sliders: [['mod-safety_factor','sl-safety_factor','safety_factor'],['mod-safety_flat_threshold','sl-safety_flat_threshold','safety_flat_threshold']] },
-  imb:  { fm: '', sliders: [['mod-imbalance_threshold_pct','sl-imbalance_threshold_pct','imbalance_threshold_pct'],['mod-rebalance_target_pct','sl-rebalance_target_pct','rebalance_target_pct'],['mod-rebalance_batches','sl-rebalance_batches','rebalance_batches'],['mod-rebalance_batch_gap_min','sl-rebalance_batch_gap_min','rebalance_batch_gap_min'],['mod-rebalance_limit_timeout_min','sl-rebalance_limit_timeout_min','rebalance_limit_timeout_min'],['mod-one_way_threshold','sl-one_way_threshold','one_way_threshold'],['mod-confirm_time','sl-confirm_time','confirm_time'],['mod-exit_buffer','sl-exit_buffer','exit_buffer'],['mod-debounce_loss_line','sl-debounce_loss_line','debounce_loss_line'],['mod-debounce_profit_line','sl-debounce_profit_line','debounce_profit_line']] },
+  imb:  { fm: '', sliders: [['mod-imbalance_threshold_pct','sl-imbalance_threshold_pct','imbalance_threshold_pct'],['mod-rebalance_target_pct','sl-rebalance_target_pct','rebalance_target_pct'],['mod-rebalance_batches','sl-rebalance_batches','rebalance_batches'],['mod-rebalance_batch_gap_min','sl-rebalance_batch_gap_min','rebalance_batch_gap_min'],['mod-rebalance_limit_timeout_min','sl-rebalance_limit_timeout_min','rebalance_limit_timeout_min'],['mod-one_way_threshold','sl-one_way_threshold','one_way_threshold'],['mod-loss_ratio_tight1','sl-loss_ratio_tight1','loss_ratio_tight1'],['mod-loss_ratio_tight2','sl-loss_ratio_tight2','loss_ratio_tight2'],['mod-confirm_time','sl-confirm_time','confirm_time'],['mod-exit_buffer','sl-exit_buffer','exit_buffer'],['mod-debounce_loss_line','sl-debounce_loss_line','debounce_loss_line'],['mod-debounce_profit_line','sl-debounce_profit_line','debounce_profit_line']] },
   ice:  { fm: 'pm-fm-iceberg', sliders: [['mod-iceberg_sz','sl-iceberg_sz','iceberg_sz'],['mod-pxVar','sl-pxVar','pxVar']] },
   bleed:{ fm: '', sliders: [['mod-bleed_threshold_pct','sl-bleed_threshold_pct','bleed_threshold_pct'],['mod-bleed_window_sec','sl-bleed_window_sec','bleed_window_sec'],['mod-equity_history_window_sec','sl-equity_history_window_sec','equity_history_window_sec']] },
   ind:  { fm: 'pm-fm-zone',    sliders: [['mod-tp_base_pct','sl-tp_base_pct','tp_base_pct'],['mod-tp_window_hours','sl-tp_window_hours','tp_window_hours']] },

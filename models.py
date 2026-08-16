@@ -120,9 +120,11 @@ class GridState:
     defense_density: float = 2.0       # 防守网格密度（防守模式 base）
     mode: str = "attack"               # attack进攻 / defense防守（人工切）
     one_way_threshold: float = 60.0    # 单向成交阈值(%)
+    loss_ratio_tight1: float = 5.0     # 贴价阈值1(%): 净浮亏/网格可用≤此值=保本夹逼
+    loss_ratio_tight2: float = 20.0    # 贴价阈值2(%): 净浮亏/网格可用≥此值=贴到最近急平
     ladder_rates: list = field(default_factory=lambda: [40, 50, 60, 70, 80])   # 档位失衡率
-    ladder_gap_up: list = field(default_factory=lambda: [2.0, 1.5, 1.2, 1.0, 0.8])  # 档位上端手填价差%(累加重仓侧挂远)
-    ladder_gap_dn: list = field(default_factory=lambda: [1.0, 0.8, 0.7, 0.5, 0.4])  # 档位下端手填价差%(化解重仓侧挂近)
+    ladder_gap_up: list = field(default_factory=lambda: [2.0, 1.5, 1.2, 1.0, 0.8])  # 档位重仓侧手填价差%(挂远少成交)
+    ladder_gap_dn: list = field(default_factory=lambda: [1.0, 0.8, 0.7, 0.5, 0.4])  # 档位轻仓侧手填价差%(挂近加速成交)
     ladder_enabled: list = field(default_factory=lambda: [True, True, True, True, True])  # 档位是否启用(勾选)
     # bePx 防抖/紧急迟滞
     confirm_time: float = 30.0         # 确认时间 T(秒)
@@ -316,6 +318,8 @@ class GridState:
                 "defense_density": self.defense_density,
                 "mode": self.mode,
                 "one_way_threshold": self.one_way_threshold,
+                "loss_ratio_tight1": self.loss_ratio_tight1,
+                "loss_ratio_tight2": self.loss_ratio_tight2,
                 "ladder_rates": list(self.ladder_rates),
                 "ladder_gap_up": list(self.ladder_gap_up),
                 "ladder_gap_dn": list(self.ladder_gap_dn),

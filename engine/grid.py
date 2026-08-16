@@ -372,22 +372,33 @@ def _debounce_upl_state(st, heavy: str, upl_pct: float) -> str:
     return prev
 
 
-def _is_emergency(st, imbalance: float, heavy_state: str) -> bool:
-    """紧急 = 失衡≥单向阈值 AND 重仓在亏(防抖后)。退出带缓冲(exit_buffer)。文档§2.7.4/2.7.5。"""
+def _one_way_tightness(st, imbalance: float) -> float:
+    """单向贴价强度 0~1（连续）：失衡≥单向阈值才 >0，按净浮亏/网格可用比例连续算。
+
+    2026-08-16 合并批次：原「单向成交(_is_one_way) + 单边防御(_is_emergency)」合并为一套。
+    挂单方向(只挂平重仓侧)由 _is_one_way 决定；本函数决定挂单价位(bePx 夹逼 vs 贴价急平)：
+      - 失衡 < 单向阈值 → 0（不贴价，正常夹逼）
+      - 净浮亏/网格可用 ≤ tight1(5%)  → 0（保本夹逼，慢慢平）
+      - 净浮亏/网格可用 ≥ tight2(20%) → 1（贴到最近急平）
+      - 中间按比例连续插值（亏得越多贴越近）
+    网格可用 = total_equity - reserved_capital；净浮亏 = 多upl + 空upl(负=亏)。
+    """
     threshold = float(getattr(st, "one_way_threshold", 60.0) or 60.0)
-    buffer = float(getattr(st, "exit_buffer", 5.0) or 5.0)
-    was_emergency = getattr(st, "_emergency", False)
-    if was_emergency:
-        # 退出两条路径：失衡回落<阈值−缓冲，或 重仓转赚
-        if imbalance < (threshold - buffer) or heavy_state == "profit":
-            st._emergency = False
-            return False
-        return True
-    # 进入：失衡≥阈值 且 在亏(防抖后)
-    if imbalance >= threshold and heavy_state == "loss":
-        st._emergency = True
-        return True
-    return False
+    if imbalance < threshold:
+        return 0.0
+    t1 = float(getattr(st, "loss_ratio_tight1", 5.0) or 5.0)
+    t2 = float(getattr(st, "loss_ratio_tight2", 20.0) or 20.0)
+    if t2 <= t1:
+        t2 = t1 + 1.0
+    pos = st.position
+    net_upl = (pos.long_unrealized_pnl or 0.0) + (pos.short_unrealized_pnl or 0.0)
+    avail = max(float(st.total_equity or 0.0) - float(getattr(st, "reserved_capital", 0.0) or 0.0), 1e-9)
+    loss_ratio = -net_upl / avail * 100   # 净浮亏占网格可用%
+    if loss_ratio <= t1:
+        return 0.0
+    if loss_ratio >= t2:
+        return 1.0
+    return (loss_ratio - t1) / (t2 - t1)
 
 
 def _is_one_way(st, imbalance: float) -> bool:
@@ -422,21 +433,26 @@ def calc_grid_levels(st) -> tuple[float, float]:
     # 紧急(单边防御)与正常共用同一套档位密度；紧急只影响"单向成交模式"判定，不影响密度选择。
     if heavy is None:
         density = _mode_base_density(st)
-        emergency = False
+        tight = 0.0
         heavy_state = "profit"
     else:
         upl_pct = _heavy_upl_pct(st, heavy)
         heavy_state = _debounce_upl_state(st, heavy, upl_pct)
-        emergency = _is_emergency(st, imbalance, heavy_state)
-        was_em = getattr(st, "emergency_state", False)
-        if emergency and not was_em:
-            # 失衡率过高 → 启动单边防御(只挂平重仓侧)，推送
+        # 2026-08-16 合并：贴价强度(0~1)取代原 _is_emergency 二值紧急
+        tight = _one_way_tightness(st, imbalance)
+        one_way = _is_one_way(st, imbalance)
+        was_ow = getattr(st, "_one_way_notified", False)
+        if one_way and not was_ow:
+            # 失衡 ≥ 单向阈值 → 启动单向(只挂平重仓侧)，推送一次
             try:
                 from notify import on_imbalance
                 on_imbalance(round(imbalance, 1),
                              float(getattr(st, "one_way_threshold", 60.0) or 60.0), heavy)
+                st._one_way_notified = True
             except Exception as e:
                 logger.debug(f"notify_imbalance: {e}")
+        if not one_way:
+            st._one_way_notified = False
         density = _ladder_density(st, imbalance)
 
     # ── 间距计算（2026-08-15 重构：收网用手填价差，上下端分开）──
@@ -470,12 +486,14 @@ def calc_grid_levels(st) -> tuple[float, float]:
         upper = anchor * (1 + spacing / 100)
         lower = anchor * (1 - spacing / 100)
 
-    # bePx 双夹逼（仅 normal/在赚；紧急拆墙贴锚点不夹逼）
-    if not emergency:
-        if pos.long_be_px > 0:
-            upper = max(upper, pos.long_be_px)
-        if pos.short_be_px > 0:
-            lower = min(lower, pos.short_be_px)
+    # bePx 夹逼（2026-08-16 合并：按贴价强度连续，不再二值 emergency）
+    # tight=0 → 全夹逼(挂单价不劣于强平价，保本)；tight=1 → 贴锚点急平(削弱夹逼)
+    if pos.long_be_px > 0:
+        # 上端挂单(开空平多)：正常夹逼保证 ≥强平价；贴价时向锚点方向拉近
+        upper = max(upper, pos.long_be_px * (1 - tight) + anchor * tight)
+    if pos.short_be_px > 0:
+        # 下端挂单(开多平空)：正常夹逼保证 ≤强平价；贴价时向锚点方向拉近
+        lower = min(lower, pos.short_be_px * (1 - tight) + anchor * tight)
 
     # 记录展示（价格按交易所 tickSz 对齐，保证锁定收益等计算用真实精度）
     st.grid_spacing_pct = round(spacing, 2)
@@ -483,7 +501,8 @@ def calc_grid_levels(st) -> tuple[float, float]:
     st.grid_lower_px = px_round(st.inst_id, lower)
     st.current_density = round(density, 3)
     # 注意：不写 st.grid_anchor_px —— 锚点只允许在 建仓/成交 时更新，防被挂单循环污染成市价。
-    st.emergency_state = emergency
+    st.emergency_state = tight >= 0.5
+    st.one_way_tight = round(tight, 3)
     st.heavy_side = heavy
     st.heavy_state = heavy_state
     return upper, lower
