@@ -196,13 +196,25 @@ class RawOkxRestClient:
                         return result
 
                 if response.status_code >= 400:
+                    # HTTP 4xx/5xx：解析业务码（body 可能非 JSON），进统一降级重试（修🔴5）
                     resp_body = response.text[:300]
+                    try:
+                        _code = str(response.json().get("code", response.status_code))
+                    except Exception:
+                        _code = str(response.status_code)
                     logger.warning("HTTP %d for %s %s: %s", response.status_code, method, url, resp_body)
-                    # 记录失败
+                    delay = _RETRY_DELAY_MAP.get(_code)
+                    if delay and attempt < max_retries:
+                        logger.warning("API降级[%s] %s %s 等待%ds 第%d次", _code, method, path, delay, attempt+1)
+                        time.sleep(delay)
+                        continue
+                    if attempt < max_retries:
+                        time.sleep(0.5)
+                        continue
                     _api_stats["fail_count"] += 1
                     _api_stats["last_fail_ts"] = time.time()
                     _api_stats["consecutive_failures"] += 1
-                    return {"code": str(response.status_code), "msg": resp_body, "data": []}
+                    return {"code": _code, "msg": resp_body, "data": []}
 
                 result = response.json()
                 code = result.get("code", "0")

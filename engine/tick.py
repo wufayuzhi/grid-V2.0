@@ -41,7 +41,13 @@ def _clear_residual_stats(st) -> None:
 
 
 async def data_loop():
-    """异步主循环：延迟后刷新 ticker/OI/持仓余额，触发决策"""
+    """异步主循环：延迟后刷新 ticker/OI/持仓余额，触发决策
+
+    修复🔴6：整块 tick 体(_loop_iteration)跑在 worker 线程(run_in_executor)，
+    内部 API 阻塞调用(含 time.sleep(60) 限流降级)不再冻结 asyncio 事件循环，
+    前端/API 路由照常响应。顺序语义保持不变（ticker→OI→账户→决策），
+    单 worker 串行执行，state 不会被并发写。
+    """
     loop = asyncio.get_event_loop()
     # 引擎启动时自动回填网格统计(滚动/已实现/手续费，从交易所订单历史权威计算)
     try:
@@ -56,13 +62,23 @@ async def data_loop():
         st = get_state()
         await asyncio.sleep(st.data_loop_interval)
         try:
-            _refresh_ticker()
-            _refresh_oi_current()
-            _refresh_account()
-            _trigger_decision()
-            loop.run_in_executor(None, _refresh_oi_full)
+            # 整块跑在 worker 线程，不冻结事件循环（修🔴6）
+            await loop.run_in_executor(None, _loop_iteration)
         except Exception as e:
             logger.error(f"data_loop: {e}")
+
+
+def _loop_iteration() -> None:
+    """单次完整 tick（同步，跑在 executor worker 线程）。
+
+    顺序：ticker → OI当前 → 持仓/余额 → 决策 → OI全量(节流)。
+    与旧 data_loop 内联体完全等价，仅由同步阻塞线程执行。
+    """
+    _refresh_ticker()
+    _refresh_oi_current()
+    _refresh_account()
+    _trigger_decision()
+    _refresh_oi_full()
 
 
 def _refresh_ticker():
