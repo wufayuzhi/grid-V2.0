@@ -792,12 +792,18 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
   <div class="toggle-wrap tb-hide-mob" onclick="toggleSim()" style="cursor:pointer">
     <span>实盘</span><span id="sim-sw" class="sw"></span><span>模拟</span>
   </div>
-  <button class="btn api tb-hide-mob" onclick="openApiModal()" title="API密钥设置" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,var(--purple),#7C3AED);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(124,58,237,.3);transition:all .2s"><span style="font-size:14px">🔑</span> API <span id="api-masked-tag" style="font-size:11px;font-weight:400;opacity:.9"></span></button>
-  <button class="btn api tb-hide-mob" onclick="openWecomConfigModal()" title="企微通知配置" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(59,130,246,.3);transition:all .2s"><span style="font-size:14px">💬</span> 通知 <span id="wc-masked-tag" style="font-size:11px;font-weight:400;opacity:.9"></span></button>
   <button class="btn log tb-hide-mob" onclick="window.open('/screener/','_blank')" title="网格交易对筛选" style="background:linear-gradient(135deg,var(--purple),var(--blue));color:#fff;border:none">🔍 选币</button>
-  <button class="btn api tb-hide-mob" id="auth-settings-entry" onclick="openAuthEditModal()" title="账号设置（修改登录名/密码）" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,#64748B,#475569);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(100,116,139,.3);transition:all .2s"><span style="font-size:14px">🔧</span> 账号</button>
-  <button class="btn log tb-hide-mob" onclick="doLogout()" id="logout-entry" title="退出登录" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,#EF4444,#DC2626);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(239,68,68,.3);transition:all .2s"><span style="font-size:14px">🚪</span> 退出</button>
-  <button class="btn log tb-hide-mob" onclick="showLog()">📋 日志</button>
+  <div class="tb-dropdown tb-hide-mob" style="position:relative;display:inline-block">
+    <button class="btn api" onclick="toggleTbDropdown(event)" title="更多设置" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;background:linear-gradient(135deg,#64748B,#475569);color:#fff;border:none;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(100,116,139,.3);transition:all .2s"><span style="font-size:14px">⚙️</span> 设置 <span style="font-size:10px;opacity:.8">▾</span></button>
+    <div id="tb-dropdown-menu" style="display:none;position:absolute;right:0;top:calc(100%+8px);min-width:170px;background:#fff;border:1px solid var(--bd);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);padding:6px;z-index:999;flex-direction:column;gap:2px">
+      <div class="tb-dropdown-item" onclick="openApiModal();hideTbDropdown()" title="API密钥设置" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;color:#334155;transition:background .15s"><span>🔑</span>API 密钥<span id="api-masked-tag" style="font-size:11px;font-weight:400;opacity:.9"></span></div>
+      <div class="tb-dropdown-item" onclick="openWecomConfigModal();hideTbDropdown()" title="企微通知配置" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;color:#334155;transition:background .15s"><span>💬</span>通知配置<span id="wc-masked-tag" style="font-size:11px;font-weight:400;opacity:.9"></span></div>
+      <div class="tb-dropdown-item" id="auth-settings-entry" onclick="openAuthEditModal();hideTbDropdown()" title="账号设置（修改登录名/密码）" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;color:#334155;transition:background .15s"><span>🔧</span>账号设置</div>
+      <div class="tb-dropdown-item" onclick="showLog();hideTbDropdown()" title="查看日志" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;color:#334155;transition:background .15s"><span>📋</span>日志</div>
+      <div style="height:1px;background:var(--bd);margin:4px 0"></div>
+      <div class="tb-dropdown-item" onclick="doLogout();hideTbDropdown()" id="logout-entry" title="退出登录" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;color:#EF4444;transition:background .15s"><span>🚪</span>退出登录</div>
+    </div>
+  </div>
   <span id="badge-run" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--t2);font-weight:600"><span id="badge-run-dot" style="width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--red);box-shadow:0 0 6px var(--red)"></span><span id="badge-run-txt">停止</span></span>
 </div>
 
@@ -3606,6 +3612,21 @@ async function onInstChange() {
 // ═══════════════════ LOG MODAL ═══════════════════
 let logAutoRefresh = null;
 function logReload() { showLog(false); }
+// ─── 顶栏"设置"下拉 ───
+function toggleTbDropdown(e) {
+  if (e) { e.stopPropagation(); }
+  const menu = document.getElementById('tb-dropdown-menu');
+  if (!menu) return;
+  const show = menu.style.display === 'none' || !menu.style.display;
+  menu.style.display = show ? 'flex' : 'none';
+}
+function hideTbDropdown() {
+  const menu = document.getElementById('tb-dropdown-menu');
+  if (menu) menu.style.display = 'none';
+}
+document.addEventListener('click', function (e) {
+  if (!e.target.closest || !e.target.closest('.tb-dropdown')) hideTbDropdown();
+});
 function showLog(auto = true) {
   document.getElementById('log-modal').classList.add('show');
   if (auto && logAutoRefresh) clearInterval(logAutoRefresh);
@@ -3864,7 +3885,10 @@ function updatePMResult(kind) {
     const up = (anchor > 0 && spacing > 0) ? anchor * (1 + spacing / 100) : S.grid_upper_px || 0;
     const dn = (anchor > 0 && spacing > 0) ? anchor * (1 - spacing / 100) : S.grid_lower_px || 0;
     // 调仓量 = max(int(总张数 × 调仓比例 ÷ 2), 1)  （正确公式：总张数的一半）
-    const total = lC + sC;
+    // 有实际持仓用实际持仓；无持仓回退初始建仓总张数（每边 initial_contracts × 2），保证调仓量有参考值
+    const liveTotal = lC + sC;
+    const initTotal = ((S.params && S.params.initial_contracts) || 0) * 2;
+    const total = liveTotal > 0 ? liveTotal : initTotal;
     const stepN = total > 0 && adj > 0 ? Math.max(Math.floor(total * adj / 2), 1) : 0;
     h = _pmRow('ATR% (近' + (S.atr_period || 24) + '根' + (S.atr_timeframe || '1H') + ')',
         atrPct > 0 ? atrPct.toFixed(2) + '%' : '—');
