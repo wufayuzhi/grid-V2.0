@@ -1654,8 +1654,8 @@ document.addEventListener('click', function(e) {
   if (!AUTH.isGuest()) return;
   var el = e.target.closest('button, .op-btn, .btn, [onclick]');
   if (!el) return;
-  // 允许的：登录、退出、图表操作、tab切换、弹窗开关
-  var allowed = ['openChartFull','closeChartFull','mobTab','toggleTimeMode','openWecomConfigModal','closeWecomConfigModal','openApiModal','closeApiModal','openAdjustModal','closeAdjustModal','switchCalcTab','doLogout','testWecom'];
+  // 允许的：登录、退出、图表操作、tab切换（只读类弹窗）
+  var allowed = ['openChartFull','closeChartFull','mobTab','toggleTimeMode','openAdjustModal','closeAdjustModal','switchCalcTab','doLogout','testWecom'];
   var oc = el.getAttribute('onclick') || '';
   var isAllowed = allowed.some(function(a) { return oc.indexOf(a) >= 0; });
   var isReadOnly = oc.indexOf('onModChange') >= 0 || oc.indexOf('onLevChange') >= 0 || oc.indexOf('onSafetyChange') >= 0;
