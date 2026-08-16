@@ -614,6 +614,15 @@ def register_routes(app: FastAPI):
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
     app.add_middleware(W2PrefixAndCacheMiddleware)
 
+    # ── 登录鉴权（网页登录 + 游客只读）──
+    try:
+        from api.auth import AuthMiddleware, register_auth_routes
+        app.add_middleware(AuthMiddleware)
+        register_auth_routes(app)
+        logger.info("✅ 登录鉴权已启用（管理员读写 / 游客只读）")
+    except Exception as e:
+        logger.warning(f"⚠️ 登录鉴权加载失败（不影响核心交易功能）: {e}")
+
     # 静态目录（相对 backend_v2/）
     _static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "static")
     try:
