@@ -1634,13 +1634,24 @@ function applyGuestLock() {
   // 隐藏账号设置入口（游客看不到修改密码/登录名）
   var authEntry = document.getElementById('auth-settings-entry');
   if (authEntry) authEntry.style.display = 'none';
-  // 拦截写操作按钮点击（显示但点击无效）
-  var sel = '.op-btn, #btn-build, #btn-start, #btn-stop, .btn.pri, .btn.ok, .btn.dan, button[onclick*="doBuild"], button[onclick*="doStartStop"], button[onclick*="doStop"], button[onclick*="doHedge"], button[onclick*="doFlat"], button[onclick*="doManualAdj"], button[onclick*="cancelIce"]';
-  document.querySelectorAll(sel).forEach(function(btn) {
-    btn.setAttribute('data-guest-locked', '1');
-    btn.classList.add('guest-locked');
-    btn.title = '🔒 游客模式只读';
+
+  // ── 游客只读：禁用所有可交互控件（滑块/输入框/下拉/开关/按钮）──
+  // 保留显示，但 disabled + 锁定视觉，点击/滑动/输入一律无效
+  document.querySelectorAll('input, select, textarea, button').forEach(function(el) {
+    // 跳过登录层自身的控件（登录页游客已隐藏，无冲突）
+    if (el.closest('#login-overlay')) return;
+    // 只读滑块/控件（如时间线、图表参数）保留可用——这些不写后端
+    var oc = el.getAttribute('onclick') || '';
+    var isReadOnlyCtl = ['toggleTimeMode','mobTab','switchCalcTab','openAdjustModal','closeAdjustModal'].some(function(a){ return oc.indexOf(a)>=0; });
+    if (el.type === 'checkbox' || el.type === 'range' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' ||
+        (el.tagName === 'INPUT' && !isReadOnlyCtl) || el.tagName === 'BUTTON') {
+      el.disabled = true;
+      el.classList.add('guest-locked');
+      el.title = '🔒 游客模式只读';
+      el.setAttribute('data-guest-locked', '1');
+    }
   });
+
   // 显示游客模式标识
   var badge = document.createElement('div');
   badge.id = 'guest-mode-badge';
