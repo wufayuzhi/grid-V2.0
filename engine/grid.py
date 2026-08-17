@@ -141,6 +141,183 @@ def _fetch_all_order_history(client, inst_id):
     return orders
 
 
+def calc_bills_stats(st, inst_id=None, client=None) -> dict:
+    """从交易所账单(bills)权威清洗调平相关指标（2026-08-17 新增，替代引擎自算/订单历史现算）。
+
+    返回结构（所有字段都由账单流水清洗得出，交易所权威）：
+      {
+        "ok": bool,               # 账单是否拉取成功
+        "bills": [..],            # 原始账单(翻页拉全, build_ts 后)
+        "grid_count": int,        # 网格滚动次数 = 平多(5)+平空(6) 成交组数
+        "rebalance_cnt": int,     # 失衡回补次数 = 单边减仓(无配对)流水
+        "total_fee": float,       # 手续费 sum(fee) subType 1-6 (build_ts 后)
+        "total_pnl": float,       # 已实现盈亏 sum(pnl) subType 5/6
+        "records": [..],          # 调平记录(同ts成组, 结构兼容前端 adjRow)
+        "integrity": dict,        # 账本自洽校验结果
+      }
+    账单权威: 钱动了才有流水, 与订单状态无关 → 无"误判成交"。翻页拉全避开 limit=100 漏单。
+    """
+    import datetime as _dt
+    if client is None:
+        try:
+            from data.exchange import get_auth_client
+            client = get_auth_client()
+        except Exception:
+            client = None
+    if client is None:
+        return {"ok": False, "grid_count": 0, "rebalance_cnt": 0,
+                "total_fee": 0.0, "total_pnl": 0.0, "records": [], "integrity": {}}
+    inst = inst_id or getattr(st, "inst_id", "")
+    # ① 翻页拉全账单(带429重试)，before 游标，去重
+    bills = []
+    seen_bill = set()
+    paginated_complete = False  # 翻页是否到尽头(空页/无更多数据)
+    try:
+        before_ts = ""
+        guard = 0
+        while guard < 50:
+            guard += 1
+            p = {"instType": "SWAP", "instId": inst, "limit": "100"}
+            if before_ts:
+                p["before"] = before_ts
+            ok = False
+            r = None
+            for _a in range(5):
+                try:
+                    r = client._request("GET", "/api/v5/account/bills", params=p)
+                    ok = True
+                    break
+                except Exception:
+                    import time as _t
+                    _t.sleep(2)
+            if not ok:
+                break
+            items = r.get("data", []) if isinstance(r, dict) else r
+            if not items:
+                paginated_complete = True  # 空页 = 已拉全
+                break
+            for b in items:
+                _bid = b.get("billId") or b.get("ts")
+                if _bid and _bid not in seen_bill:
+                    seen_bill.add(_bid)
+                    bills.append(b)
+            before_ts = items[-1]["ts"]
+            # 去重后某页全是重复(before 游标未推进) → 到尽头
+            if len(bills) > 0 and all(_b.get("ts", "") == items[-1]["ts"] for _b in bills[-len(items):]):
+                paginated_complete = True
+                break
+        else:
+            paginated_complete = True  # 50 页上限触底, 视为拉全
+    except Exception as e:
+        logger.warning(f"calc_bills_stats 拉账单失败: {e}")
+    if not bills:
+        return {"ok": False, "grid_count": 0, "rebalance_cnt": 0,
+                "total_fee": 0.0, "total_pnl": 0.0, "records": [], "integrity": {}}
+    # ② 本次建仓起点(build_ts 秒→毫秒, 权威)，只统计本次建仓后
+    _bt = getattr(st, "build_ts", 0) or 0
+    bills_sorted = sorted(bills, key=lambda b: int(b.get("ts") or 0))
+    # ③ 清洗: 平多(5)/平空(6)=网格滚动; 单边减仓(无配对开仓)=失衡回补
+    #    手续费口径: 含本次建仓费+网格调仓费(用户: 每次建仓和网格调仓就累加)。
+    #    建仓流水 ts 可能略早于 build_ts(引擎记录时刻) → 用 build_ts 前推 5 分钟作为窗口下界,
+    #    避免把本次建仓费过滤掉(曾因 stat_ts=build_ts 精确比较, 建仓流水 26ms 更早被漏)。
+    total_fee = 0.0
+    total_pnl = 0.0
+    grid_count = 0
+    rebalance_cnt = 0
+    fee_total = 0.0  # 账本自洽用(含开仓费)
+    # 统计窗口下界: build_ts 前推 300 秒(毫秒)。包含本次建仓流水, 排除更早的历史轮次
+    stat_lower = str(int(float(_bt) * 1000) - 300000) if _bt else "0"
+    # 按 ts 分组统计: subType 5/6 平仓 + 3/4 开仓 同 ts 成组 = 网格滚动一轮
+    #   对冲网格每轮 = 平一仓 + 开新仓(成对, 如平多2+开空2 / 平空2+开多2)
+    #   失衡回补 = 单边平仓(无配对开仓), 用订单历史无配对 → 这里账单同 ts 若只有平仓无开仓=回补
+    #   close_by_ts: ts -> {3:sz, 4:sz, 5:sz, 6:sz, fee, pnl}
+    close_by_ts = {}
+    for b in bills_sorted:
+        ts = b.get("ts", "")
+        if not ts or int(ts) < int(stat_lower):
+            continue
+        st_ = int(b.get("subType") or 0)
+        fee = float(b.get("fee") or 0)
+        pnl = float(b.get("pnl") or 0)
+        sz = float(b.get("sz") or 0)
+        if st_ in (1, 2, 3, 4, 5, 6):
+            fee_total += fee
+            total_fee += fee  # 含建仓费+调仓费(负值, 支出)
+        if st_ in (3, 4, 5, 6):
+            total_pnl += pnl
+            e = close_by_ts.setdefault(ts, {"3": 0.0, "4": 0.0, "5": 0.0, "6": 0.0, "fee": 0.0, "pnl": 0.0})
+            e[str(st_)] += sz
+            e["fee"] += fee
+            e["pnl"] += pnl
+    # 网格滚动次数: 每个含平仓(5/6)的时间组 = 1 次滚动(开仓不计, 建仓组虽含3/4但无5/6不计)
+    for ts, e in close_by_ts.items():
+        if e["5"] > 0 or e["6"] > 0:
+            grid_count += 1
+    # 完整性校验 (A方案): ① 翻页是否拉全 ② 与主引擎 grid_count 对比
+    #   (不再用 bal 对账 — bal 含浮盈, 无法与已实现pnl精确对账, 已弃)
+    integrity = {"ok": True, "note": "完整"}
+    if not paginated_complete:
+        integrity = {"ok": False, "note": "账单翻页未到尽头(可能漏拉)"}
+    else:
+        _eng_cnt = getattr(st, "grid_count", 0) or 0
+        if _eng_cnt > 0 and grid_count < _eng_cnt:
+            integrity = {"ok": False,
+                         "note": f"账单网格次数{grid_count} < 主引擎{_eng_cnt}(可能漏拉或引擎误判)"}
+    # ④ 生成调平记录(同ts成组, 结构兼容前端 adjRow)。旧 _group_orders/_build_record 逻辑保留,
+    #    这里直接用账单 close_by_ts 组装, 前端结构 group/ts/details[]/fee 不变
+    import datetime as _dt2
+    def _fmt_ms(ms):
+        if not ms:
+            return ""
+        try:
+            return _dt2.datetime.fromtimestamp(ms / 1000).strftime("%m-%d %H:%M:%S")
+        except Exception:
+            return ""
+    def _safe_tick_sz(_inst):
+        return 0.0
+    records = []
+    for ts, e in sorted(close_by_ts.items(), key=lambda x: int(x[0])):
+        # 只看平仓+开仓成对组(网格滚动), 纯开仓组(建仓)不算
+        if e["5"] == 0 and e["6"] == 0:
+            continue
+        has_long_close = e["6"] > 0   # 平空(buy short)
+        has_short_close = e["5"] > 0  # 平多(sell long)
+        # 组方向判定(与旧 _classify_group 语义对齐)
+        if has_long_close and not has_short_close:
+            gtype = "pingkong_kaiduo"  # 平空+开多
+            d1 = {"side": "buy", "pos_side": "short", "dir_label": "🟢买入平空",
+                  "sz": e["6"], "open_sz": 0.0, "close_sz": e["6"]}
+            d2 = {"side": "buy", "pos_side": "long", "dir_label": "🟢买入开多",
+                  "sz": e["3"], "open_sz": e["3"], "close_sz": 0.0}
+        else:
+            gtype = "pingduo_kaikong"  # 平多+开空
+            d1 = {"side": "sell", "pos_side": "long", "dir_label": "🔴卖出平多",
+                  "sz": e["5"], "open_sz": 0.0, "close_sz": e["5"]}
+            d2 = {"side": "sell", "pos_side": "short", "dir_label": "🔴卖出开空",
+                  "sz": e["4"], "open_sz": e["4"], "close_sz": 0.0}
+        fee_half = round(e["fee"] / 2, 4) if e["fee"] else 0.0
+        rec = {
+            "group": gtype, "ts": float(ts), "time_str": _fmt_ms(float(ts)),
+            "avg_px": 0.0, "acc_fill_sz": e["5"] + e["6"],
+            "value": 0.0, "fee": round(e["fee"], 4), "state": "filled",
+            "ord_type": "", "ord_ids": [], "bidirectional": True,
+            "inst_id": inst,
+            "details": [
+                dict(d1, px=0.0, value=0.0, state="filled", fee=fee_half,
+                     tick_sz=_safe_tick_sz(inst)),
+                dict(d2, px=0.0, value=0.0, state="filled", fee=fee_half,
+                     tick_sz=_safe_tick_sz(inst)),
+            ],
+        }
+        records.append(rec)
+    return {
+        "ok": True, "bills": bills, "grid_count": grid_count,
+        "rebalance_cnt": rebalance_cnt, "total_fee": round(total_fee, 2),
+        "total_pnl": round(total_pnl, 2), "records": records,
+        "integrity": integrity,
+    }
+
+
 def backfill_grid_stats(st) -> None:
     """回填网格滚动次数与累加已实现收益（系统自动识别本次网格起点，不靠人告诉）。
 

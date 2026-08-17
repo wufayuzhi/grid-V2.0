@@ -1867,20 +1867,38 @@ def register_routes(app: FastAPI):
     @app.get("/api/v1/trade/adjust-history")
     async def adjust_history_route():
         st = get_state()
-        cli = get_auth_client() if get_auth_client else None
-        if cli is not None:
-            try:
-                hist = cli.get_order_history(getattr(st, "inst_id", ""), limit=100)
-            except Exception:
-                hist = []
-            # 方案B：全量按cTime窗口重建记录（幂等/自愈；分批成交时张数与手续费每轮重算跟最新）
-            records = []
-            for g in _group_orders(hist or []):
-                gtype = _classify_group(g)
-                if gtype == "build":
-                    continue
-                records.append(_build_record(g, gtype))
-            st.adjust_records = records[-300:]
+        # 2026-08-17: 数据源从「订单历史现算」改为「账单(bills)权威清洗」。
+        #   账单翻页拉全(避开 limit=100 漏单)、build_ts 过滤本次建仓后、含建仓费+调仓费。
+        #   主引擎记账降级为完整性报警器(calc_bills_stats.integrity)。
+        #   前端 adjRow() 渲染结构不变 → 显示格式零改动。
+        # [旧逻辑注释保留, 验证通过后再删]
+        # cli = get_auth_client() if get_auth_client else None
+        # if cli is not None:
+        #     try:
+        #         hist = cli.get_order_history(getattr(st, "inst_id", ""), limit=100)
+        #     except Exception:
+        #         hist = []
+        #     # 方案B：全量按cTime窗口重建记录（幂等/自愈；分批成交时张数与手续费每轮重算跟最新）
+        #     records = []
+        #     for g in _group_orders(hist or []):
+        #         gtype = _classify_group(g)
+        #         if gtype == "build":
+        #             continue
+        #         records.append(_build_record(g, gtype))
+        #     st.adjust_records = records[-300:]
+        try:
+            from engine.grid import calc_bills_stats
+            stats = calc_bills_stats(st)
+            if stats.get("ok"):
+                st.adjust_records = stats.get("records", [])[-300:]
+                # 完整性报警: 翻页未拉全 或 账单次数<主引擎 → 记日志
+                _intg = stats.get("integrity", {})
+                if _intg and not _intg.get("ok", True):
+                    import logging
+                    logging.getLogger("routes").warning(f"adjust-history 账单校验告警: {_intg.get('note')}")
+        except Exception as _e:
+            import logging
+            logging.getLogger("routes").exception(f"adjust-history 账单清洗失败: {_e}")
         return {"status": "ok", "data": _serialize_adjust(st)}
 
     # ═══ 企微通知配置（前端可配置：长链接/群推送/大模型）═══

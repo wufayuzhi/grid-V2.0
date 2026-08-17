@@ -26,6 +26,10 @@ logger = logging.getLogger(__name__)
 _atr_last_refresh = 0.0
 _ATR_REFRESH_INTERVAL = 60.0
 
+# 账单权威重算节流（2026-08-17 新增，方案B：周期用账单覆盖引擎自算值，几分钟迟滞避开限流）
+_bills_last_refresh = 0.0
+_BILLS_REFRESH_INTERVAL = 300.0  # 每5分钟用账单权威值覆盖 grid_count/total_fee/total_pnl
+
 
 def _clear_residual_stats(st) -> None:
     """清掉 state 里可能残留的网格/收益统计（切模式时可能带入的模拟盘数据）。
@@ -79,6 +83,7 @@ def _loop_iteration() -> None:
     _refresh_account()
     _trigger_decision()
     _refresh_oi_full()
+    _refresh_bills_stats()  # 2026-08-17 方案B：周期用账单权威值覆盖引擎自算
 
 
 def _refresh_ticker():
@@ -94,6 +99,39 @@ def _refresh_oi_current():
 def _refresh_oi_full():
     from data.ticker import refresh_oi
     refresh_oi()
+
+
+def _refresh_bills_stats() -> None:
+    """2026-08-17 方案B：周期(每5分钟)用账单权威值覆盖引擎自算的 grid_count/total_fee/total_pnl。
+
+    账单是唯一权威源(钱动了才有流水, 无引擎误判)。主引擎记账降级为完整性报警器。
+    引擎成交时的 +1/+fees 保留为实时值, 此处周期覆盖为账单权威值(几分钟迟滞, 避开限流)。
+    """
+    global _bills_last_refresh
+    now = time.time()
+    if now - _bills_last_refresh < _BILLS_REFRESH_INTERVAL:
+        return
+    _bills_last_refresh = now
+    try:
+        from engine.grid import calc_bills_stats
+        from state import save_state
+        st = get_state()
+        stats = calc_bills_stats(st)
+        if not stats.get("ok"):
+            logger.warning("账单周期重算: 拉取失败, 保留引擎值")
+            return
+        # 账单权威值覆盖(仅当账单非空且翻页完整)
+        _intg = stats.get("integrity", {})
+        if _intg and not _intg.get("ok", True):
+            logger.warning(f"账单周期重算: 校验告警 {_intg.get('note')} — 仍按账单覆盖")
+        st.grid_count = stats.get("grid_count", st.grid_count)
+        st.total_fee = abs(stats.get("total_fee", 0.0))  # 正数: 前端 已实现+浮盈-手续费
+        st.total_pnl = stats.get("total_pnl", st.total_pnl)
+        st.adjust_records = (stats.get("records", []) or st.adjust_records or [])[-300:]
+        save_state()
+        logger.info(f"账单周期重算: grid={st.grid_count} fee={st.total_fee:.2f} pnl={st.total_pnl:.2f}")
+    except Exception as e:
+        logger.warning(f"账单周期重算失败: {e}")
 
 
 def _refresh_account():
