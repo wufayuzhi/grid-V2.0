@@ -419,6 +419,8 @@ tr.adj-mixed-cancel td{color:#6566D8}
   .mob-tool-btn.notify { background: linear-gradient(135deg,#3B82F6,#2563EB); color: #fff; border: none; }
   .mob-tool-btn.screener { background: linear-gradient(135deg,var(--purple),var(--blue)); color: #fff; border: none; }
   .mob-tool-btn.log { background: #F8FAFC; color: var(--t2); border: 1px solid var(--bd); }
+  .mob-tool-btn.auth { background: linear-gradient(135deg,#8B5CF6,#6D28D9); color: #fff; border: none; }
+  .mob-tool-btn.logout { background: #FFF1F2; color: #DC2626; border: 1px solid #FECDD3; }
   .mob-mode-toggle { display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 10px; border: 1px solid var(--bd); background: #F8FAFC; margin-top: 8px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text); }
   .mob-mode-toggle .mt-state { margin-left: auto; font-size: 11px; font-weight: 700; }
   .mob-mode-toggle .mt-state.live { color: var(--green); }
@@ -993,6 +995,8 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
       <button class="mob-tool-btn notify" onclick="openWecomConfigModal()"><span class="t-ic">💬</span>通知</button>
       <button class="mob-tool-btn screener" onclick="window.open('/screener/','_blank')"><span class="t-ic">🔍</span>选币</button>
       <button class="mob-tool-btn log" onclick="showLog()"><span class="t-ic">📋</span>日志</button>
+      <button class="mob-tool-btn auth" id="mob-auth-entry" onclick="openAuthEditModal()"><span class="t-ic">🔧</span>账号设置</button>
+      <button class="mob-tool-btn logout" id="mob-logout-entry" onclick="doLogout()"><span class="t-ic">🚪</span>退出登录</button>
     </div>
     <div class="mob-mode-toggle" onclick="toggleSim()">
       <span>🔄</span>
@@ -1619,6 +1623,7 @@ var AUTH = (function() {
 
 // 所有 API 请求自动附带 token
 // 重写全局 fetch：对 /W2/api/ 和 /api/ 请求自动带 token，无需改每个调用点
+// 同时：收到 401（token 过期/未登录）时自动清 token 并回登录页，避免界面卡死在无数据状态
 (function() {
   var origFetch = window.fetch;
   window.fetch = function(url, opts) {
@@ -1629,7 +1634,15 @@ var AUTH = (function() {
     if ((u.indexOf('/W2/api/') >= 0 || u.indexOf('/api/') >= 0) && u.indexOf('/api/v1/auth/') < 0) {
       if (AUTH.getToken()) opts.headers['x-auth-token'] = AUTH.getToken();
     }
-    return origFetch(url, opts);
+    var isAuthApi = u.indexOf('/api/v1/auth/') >= 0;
+    return origFetch(url, opts).then(function(res) {
+      // token 过期/无效：401 且非登录类接口 → 清 token + 回登录页
+      if (res && res.status === 401 && !isAuthApi && AUTH.isLogged()) {
+        AUTH.clearToken();
+        location.reload();
+      }
+      return res;
+    });
   };
 })();
 function authFetch(url, opts) {
@@ -1645,12 +1658,16 @@ function applyGuestLock() {
   // 隐藏账号设置入口（游客看不到修改密码/登录名）
   var authEntry = document.getElementById('auth-settings-entry');
   if (authEntry) authEntry.style.display = 'none';
+  var mobAuthEntry = document.getElementById('mob-auth-entry');
+  if (mobAuthEntry) mobAuthEntry.style.display = 'none';
 
   // ── 游客只读：禁用所有可交互控件（滑块/输入框/下拉/开关/按钮）──
   // 保留显示，但 disabled + 锁定视觉，点击/滑动/输入一律无效
   document.querySelectorAll('input, select, textarea, button').forEach(function(el) {
     // 跳过登录层自身的控件（登录页游客已隐藏，无冲突）
     if (el.closest('#login-overlay')) return;
+    // 移动端退出按钮：游客也要能退出，不禁用
+    if (el.id === 'mob-logout-entry') return;
     // 只读滑块/控件（如时间线、图表参数）保留可用——这些不写后端
     var oc = el.getAttribute('onclick') || '';
     var isReadOnlyCtl = ['toggleTimeMode','mobTab','switchCalcTab','openAdjustModal','closeAdjustModal'].some(function(a){ return oc.indexOf(a)>=0; });
