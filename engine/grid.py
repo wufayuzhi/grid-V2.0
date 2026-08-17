@@ -141,6 +141,12 @@ def _fetch_all_order_history(client, inst_id):
     return orders
 
 
+# 账单权威清洗结果缓存：避免前端频繁打开页面 / 主引擎周期调用时反复翻页拉账单触发 OKX 429 限流。
+# 账单是慢变量(几小时才变一次)，60 秒缓存不影响准确性；切合约按 inst_id 自动失效。
+_bills_cache: dict = {}  # {inst_id: (ts, result_dict)}
+_BILLS_CACHE_TTL = 60.0
+
+
 def calc_bills_stats(st, inst_id=None, client=None) -> dict:
     """从交易所账单(bills)权威清洗调平相关指标（2026-08-17 新增，替代引擎自算/订单历史现算）。
 
@@ -158,6 +164,13 @@ def calc_bills_stats(st, inst_id=None, client=None) -> dict:
     账单权威: 钱动了才有流水, 与订单状态无关 → 无"误判成交"。翻页拉全避开 limit=100 漏单。
     """
     import datetime as _dt
+    import time as _time
+    inst = inst_id or getattr(st, "inst_id", "")
+    # 缓存命中：60 秒内同合约直接返回上次翻页结果，不再触发账单翻页(避开 OKX 429 限流)
+    if inst:
+        _cached = _bills_cache.get(inst)
+        if _cached and _time.time() - _cached[0] < _BILLS_CACHE_TTL:
+            return _cached[1]
     if client is None:
         try:
             from data.exchange import get_auth_client
@@ -167,7 +180,6 @@ def calc_bills_stats(st, inst_id=None, client=None) -> dict:
     if client is None:
         return {"ok": False, "grid_count": 0, "rebalance_cnt": 0,
                 "total_fee": 0.0, "total_pnl": 0.0, "records": [], "integrity": {}}
-    inst = inst_id or getattr(st, "inst_id", "")
     # ① 翻页拉全账单(带429重试)，before 游标，去重
     bills = []
     seen_bill = set()
@@ -310,12 +322,16 @@ def calc_bills_stats(st, inst_id=None, client=None) -> dict:
             ],
         }
         records.append(rec)
-    return {
+    _result = {
         "ok": True, "bills": bills, "grid_count": grid_count,
         "rebalance_cnt": rebalance_cnt, "total_fee": round(total_fee, 2),
         "total_pnl": round(total_pnl, 2), "records": records,
         "integrity": integrity,
     }
+    # 写入缓存：仅缓存成功翻页结果，失败(bills空/ok=False)不缓存以免掩盖真实限流/异常
+    if inst:
+        _bills_cache[inst] = (_time.time(), _result)
+    return _result
 
 
 def backfill_grid_stats(st) -> None:
