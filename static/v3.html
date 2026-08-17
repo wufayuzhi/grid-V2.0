@@ -2476,14 +2476,15 @@ async function refresh() {
     document.getElementById('m-gc').textContent = S.grid_count || 0;
     const mGcSub = document.getElementById('m-gc-sub');
     if (mGcSub) mGcSub.textContent = '回补 ' + (S.rebalance_cnt || 0) + ' 次';
-    // 净收益 = 已实现 + 浮盈(动态 upl) − 手续费；浮盈来自当前持仓实时值
-    const upnl = (S.long?.unrealized_pnl || 0) + (S.short?.unrealized_pnl || 0);
-    const netPnl = (S.total_pnl || 0) + upnl - (S.total_fee || 0);
+    // 净利润 = 实时权益 − 建仓前权益(含浮盈，手续费已含在权益里不重复扣)
+    const netPnl = (S.total_equity || 0) - (S.capital || 0);
     const pnlEl = document.getElementById('m-pnl');
-    pnlEl.textContent = netPnl.toFixed(2);
+    pnlEl.textContent = S.running
+      ? `净利 ${netPnl.toFixed(2)} = 实时 ${(S.total_equity||0).toFixed(2)} - 建仓前 ${(S.capital||0).toFixed(2)}`
+      : '—';
     pnlEl.className = 'mv ' + (netPnl >= 0 ? 'up' : 'down');
     const pnlSub = document.getElementById('m-pnl-sub');
-    pnlSub.textContent = `已实现${(S.total_pnl||0).toFixed(2)} + 浮盈${upnl.toFixed(2)} − 费${(S.total_fee||0).toFixed(2)}`;
+    pnlSub.textContent = `手续费 ${(S.total_fee||0).toFixed(2)} USDT`;
 
     // ── 委托记录 & 调平记录（拉交易所真实数据，节流10s）──
     if (Date.now() - (_tradeTick || 0) > 10000) {
