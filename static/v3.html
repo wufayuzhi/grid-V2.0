@@ -335,6 +335,7 @@ tr.adj-mixed-cancel td{color:#6566D8}
   .mkt-strip{grid-template-columns:repeat(3,1fr)}
   .bottom-layer{grid-template-columns:1fr}
   .metrics-row{grid-template-columns:repeat(3,1fr)}
+  .metrics-row .met-pnl{grid-column:1 / -1}
   #chart-container{height:220px !important}
   .modal-box{max-width:95vw !important;padding:14px}
   .param-modal .pm-body{grid-template-columns:1fr}
@@ -938,7 +939,7 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
   <div class="met-cell"><div class="ml">安全距离</div><div class="mv" id="m-sd">—</div><div class="mn-sub" id="m-sd-danger" style="font-size:10px;opacity:.65;font-weight:normal;margin-top:2px">—</div></div>
   <div class="met-cell"><div class="ml">liqPx</div><div class="mv" id="m-liq">—</div></div>
   <div class="met-cell"><div class="ml">网格</div><div class="mv" id="m-gc">0</div><div class="mn-sub" id="m-gc-sub" style="font-size:10px;opacity:.65;font-weight:normal;margin-top:2px">—</div></div>
-  <div class="met-cell"><div class="ml">净收益</div><div class="mv" id="m-pnl">0.00</div><div class="mn-sub" id="m-pnl-sub" style="font-size:10px;opacity:.65;font-weight:normal;margin-top:2px">—</div></div>
+  <div class="met-cell met-pnl"><div class="ml">净收益</div><div class="mv" id="m-pnl">0.00</div><div class="mn-sub" id="m-pnl-sub" style="font-size:10px;opacity:.65;font-weight:normal;margin-top:2px">—</div></div>
 </div>
 
 <!-- ═══════ LAYER 5: CONTROL ═══════ -->
