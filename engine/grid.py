@@ -189,6 +189,10 @@ def backfill_grid_stats(st) -> None:
                 break
         if start_ts is None:
             start_ts = orders_desc[-1].get("cTime", "0")
+        # 手续费/已实现收益统计起点：本次引擎建仓时刻(build_ts，权威)，转毫秒与账单ts对齐，
+        # 只统计本次建仓后的账单，排除历史轮次的手续费。
+        _bt = getattr(st, "build_ts", 0) or 0
+        stat_ts = str(int(float(_bt) * 1000)) if _bt else start_ts
         # ② 拉全账单(带重试避开限流) — 滚动/已实现/手续费统一从账单(权威)
         bills = []
         try:
@@ -245,7 +249,7 @@ def backfill_grid_stats(st) -> None:
         seen = set()
         for b in bills:
             ts = b.get("ts", "")
-            if not ts or int(ts) <= int(start_ts):
+            if not ts or int(ts) <= int(stat_ts):
                 continue
             st_ = int(b.get("subType") or 0)
             if st_ in (5, 6):

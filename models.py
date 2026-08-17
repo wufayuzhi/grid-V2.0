@@ -238,6 +238,7 @@ class GridState:
             "liqPx": px_round(self.inst_id, pos.liqPx),
             "safety_distance_pct": round(self.safety_distance_pct, 2),
             "total_equity": round(self.total_equity, 2) if self.total_equity is not None else 0.0,
+            "capital": round(self.capital, 2) if getattr(self, "capital", None) else 0.0,
             "reserved_capital": round(self.reserved_capital, 2),
             "grid_available": round(self.grid_available, 2),
             "total_pnl": round(self.total_pnl, 2),
