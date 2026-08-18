@@ -1409,12 +1409,17 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
 // 图表库 onload 后再调 initCharts()（建 K 线图 + 首次/增量刷新）。
 // 解决首次打开"像静态页、要等一会才活"：数据不再等图表库下载完。
 (function boot() {
-  if (typeof main === 'function') {
-    try { main(); } catch (e) { console.log('boot main:', e); }
-  }
+  // main() 延迟到脚本全部执行完再调用（setTimeout 0）。
+  // 原因：main 是 function 声明（提升可提前调用），但 AUTH 是 var 定义、要执行到 1623 才赋值。
+  // 若 boot 在 1411 立即调 main()，main 跑到 4273 用 AUTH 时 AUTH 还是 undefined → main 崩溃 → initCharts 未导出 → K线永不初始化。
+  setTimeout(function () {
+    if (typeof main === 'function') {
+      try { main(); } catch (e) { console.log('boot main:', e); }
+    }
+  }, 0);
   var s = document.createElement('script');
   s.src = (location.pathname.startsWith('/W2/') ? '/W2' : '') + '/static/lightweight-charts.standalone.production.js';
-  s.onload = function () { try { initCharts(); } catch (e) { console.log('boot initCharts:', e); } };
+  s.onload = function () { try { window.initCharts && window.initCharts(); } catch (e) { console.log('boot initCharts:', e); } };
   s.onerror = function () { var c = document.getElementById('chart-container'); if (c) c.innerHTML = '<p style=color:red;padding:20px>❌ 图表库加载失败</p>'; };
   document.head.appendChild(s);
 })();
