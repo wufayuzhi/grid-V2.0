@@ -1621,15 +1621,17 @@ else { restoreKlinePrefs(); }
 //  🔐 登录鉴权 JS（网页登录 + 游客只读）
 // ══════════════════════════════════════════════════════════════
 var AUTH = (function() {
-  var _token = localStorage.getItem('gw2_token') || '';
-  var _role = localStorage.getItem('gw2_role') || '';
+  // 2026-08-18 安全加固：token 改存 sessionStorage —— 关闭标签页/浏览器即清空，实现"关闭即退出登录"。
+  // （浏览器记住密码可一键重新登录，兼顾便利）
+  var _token = sessionStorage.getItem('gw2_token') || '';
+  var _role = sessionStorage.getItem('gw2_role') || '';
   function setToken(tok, role) {
     _token = tok; _role = role;
-    try { localStorage.setItem('gw2_token', tok); localStorage.setItem('gw2_role', role); } catch(e) {}
+    try { sessionStorage.setItem('gw2_token', tok); sessionStorage.setItem('gw2_role', role); } catch(e) {}
   }
   function clearToken() {
     _token = ''; _role = '';
-    try { localStorage.removeItem('gw2_token'); localStorage.removeItem('gw2_role'); } catch(e) {}
+    try { sessionStorage.removeItem('gw2_token'); sessionStorage.removeItem('gw2_role'); } catch(e) {}
   }
   function getToken() { return _token; }
   function getRole() { return _role; }
@@ -1760,6 +1762,8 @@ async function doGuest() {
     if (!res.ok || json.status !== 'ok') { err.textContent = json.msg || '游客进入失败'; return; }
     AUTH.setToken(json.token, 'guest');
     hideLogin(); applyGuestLock(); refreshAfterLogin();
+    // 游客 2 小时无操作自动登出（安全加固）
+    if (typeof window.startGuestIdleWatcher === 'function') { try { window.startGuestIdleWatcher(); } catch(e) {} }
   } catch(e) { err.textContent = '游客进入失败: ' + e.message; }
 }
 
@@ -1777,18 +1781,36 @@ function hideLogin() {
 }
 
 // 登录/游客进入成功后：补拉所有一次性数据（避免页面加载时未登录发起的 401 请求没重试，导致余额/行情/预检/杠杆不刷新）
+// 2026-08-18 修复作用域：refresh/initInsts/S 等都在 main() 内部，顶层直接引用会 ReferenceError。
+// 改为调用 main() 内导出的 window.__dataBoot()（一次性启动全部数据拉取）。
 function refreshAfterLogin() {
-  try { refresh(); } catch(e) {}
-  if (S.inst_id) {
-    try { fetchMarketData(S.inst_id); } catch(e) {}
-    try { fetchPrecheck(); } catch(e) {}
-    try { fetchLeverOptions(); } catch(e) {}
-    try { fetchBalance(); } catch(e) {}
+  if (typeof window.__dataBoot === 'function') {
+    try { window.__dataBoot(); } catch(e) {}
   }
-  try { updateTrend(); } catch(e) {}
-  try { loadChartData(); } catch(e) {}
-  try { fetchAdjust(); } catch(e) {}
 }
+
+// 游客 2 小时无操作自动登出（2026-08-18 安全加固）
+// 仅对游客生效；管理员不受限（避免本人误登出）。监听操作事件重置计时器。
+(function() {
+  var GUEST_IDLE_MS = 2 * 60 * 60 * 1000;  // 2 小时
+  var guestTimer = null;
+  function armGuestIdle() {
+    clearTimeout(guestTimer);
+    guestTimer = setTimeout(function() {
+      if (AUTH.isGuest()) {
+        try { doLogout(); } catch(e) {}
+      }
+    }, GUEST_IDLE_MS);
+  }
+  function startGuestIdleWatcher() {
+    ['click','keydown','mousemove','touchstart','scroll'].forEach(function(ev) {
+      document.addEventListener(ev, armGuestIdle, { passive: true });
+    });
+    armGuestIdle();
+  }
+  // 暴露给 main() 内登录成功后调用（游客进入 applyGuestLock 后启动计时）
+  window.startGuestIdleWatcher = startGuestIdleWatcher;
+})();
 
 // 页面加载时初始化登录状态
 (function() {
@@ -4163,6 +4185,9 @@ function applyPreset(type, el) {
 async function initInsts() {
   const sel = document.getElementById('mkt-inst-sel');
   if (!sel) return;
+  // 登录守卫：未登录不发 adapter/state 请求（后端 AuthMiddleware 要求 token，未登录全 401）。
+  // 登录/游客成功后由 refreshAfterLogin() 重新调用本函数。
+  if (!AUTH.isLogged()) return;
 
   // 备用列表（纯币名）
   const fallbackCoins = ['ETH', 'BTC', 'XRP', 'SOL', 'DOGE', 'BNB', 'ADA', 'AVAX',
@@ -4219,26 +4244,45 @@ async function initInsts() {
 }
 
 // ═══════════════════ BOOT ═══════════════════
-// 方案A（2026-08-18）：数据层立即启动，不等图表库。
-// refresh/market/precheck/leverage/balance/trend 都是纯数据（0 引用图表库），
-// 页面一打开就开始拉数填充，K线由 initCharts()（图表库 onload 后）再建。
-initInsts().then(() => {
-  refresh();
-  fetchMarketData(S.inst_id);
-  fetchPrecheck();
-  fetchLeverOptions();
-  fetchBalance();
-});
-setInterval(refresh, 3000);
-setTimeout(() => updateTrend(), 1500);
+// 方案A（2026-08-18）：数据加载与图表库解耦，但尊重鉴权。
+// - main() 由 boot() 立即执行（定义函数），图表库后台并行下载，onload 后 initCharts() 建 K 线。
+// - 数据层（refresh/market/precheck/leverage/balance/trend/initInsts）要求登录 token：
+//   已登录 → 立即启动；未登录 → 不发任何请求（避免 401 刷屏），登录成功后由 refreshAfterLogin() 统一启动。
+// - window.__dataBoot()：一次性启动全部数据拉取，供 BOOT 与顶层 refreshAfterLogin() 复用（修作用域）。
+function __dataBoot() {
+  if (!AUTH.isLogged()) return;
+  try {
+    initInsts().then(function() {
+      try { refresh(); } catch(e) {}
+      if (S.inst_id) {
+        try { fetchMarketData(S.inst_id); } catch(e) {}
+        try { fetchPrecheck(); } catch(e) {}
+        try { fetchLeverOptions(); } catch(e) {}
+        try { fetchBalance(); } catch(e) {}
+      }
+      try { updateTrend(); } catch(e) {}
+      try { fetchAdjust(); } catch(e) {}
+    });
+  } catch(e) {}
+  // 登录后确保 K线首次加载（图表已就绪时；未就绪则 loadChartData 内 series 保护安全跳过）
+  try { loadChartData(); } catch(e) {}
+}
+window.__dataBoot = __dataBoot;
+
+// BOOT：已登录立即启动数据层
+if (AUTH.isLogged()) { try { __dataBoot(); } catch(e) {} }
+// refresh 轮询保留：登录后每 3s 更新；未登录不发送（AUTH.isLogged() 守卫，避免 401）
+setInterval(() => { if (AUTH.isLogged()) refresh(); }, 3000);
+setTimeout(() => { if (AUTH.isLogged()) updateTrend(); }, 1500);
 
 // 图表初始化：延迟到图表库 onload 后由 boot() 触发（window 导出，boot onload 调用）
 function initCharts() {
   if (!window.LightweightCharts) return;   // 图表库未就绪安全返回
   initChart();
-  setTimeout(() => loadChartData(), 1000);
+  // K线拉取需登录鉴权：已登录立即拉首次；未登录等 refreshAfterLogin 触发（登录后走增量轮询）
+  if (AUTH.isLogged()) setTimeout(() => loadChartData(), 1000);
   // K线实时刷新——每1秒增量拉最新K线（after参数只取新增，保持用户缩放/滚动视图，不重置）
-  setInterval(() => { if (S.inst_id) loadChartData(S.cur_tf || '15m', false, true); }, 1000);
+  setInterval(() => { if (AUTH.isLogged() && S.inst_id) loadChartData(S.cur_tf || '15m', false, true); }, 1000);
 }
 window.initCharts = initCharts;
 // （手机端 init 已由顶层 DOMContentLoaded 触发，见 function main 之前）
