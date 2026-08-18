@@ -4346,13 +4346,25 @@ function __dataBoot() {
   try {
     initInsts().then(function() {
       if (S.inst_id) {
-        try { fetchMarketData(S.inst_id); } catch(e) {}
-        try { fetchPrecheck(); } catch(e) {}
-        try { fetchLeverOptions(); } catch(e) {}
-        try { fetchBalance(); } catch(e) {}
+        // 登录后数据加载：串行排队（一次一个），避免手机弱网并发打爆全部请求超时
+        var __seq = [
+          function(){ try { fetchMarketData(S.inst_id); } catch(e){} },
+          function(){ try { fetchPrecheck(); } catch(e){} },
+          function(){ try { fetchLeverOptions(); } catch(e){} },
+          function(){ try { fetchBalance(); } catch(e){} },
+          function(){ try { updateTrend(); } catch(e){} },
+          function(){ try { fetchAdjust(); } catch(e){} }
+        ];
+        // 顺序执行：每个完成后再发下一个（间隔 200ms，避免瞬时洪峰）
+        (function runNext(i){
+          if (i >= __seq.length) return;
+          __seq[i]();
+          setTimeout(function(){ runNext(i+1); }, 200);
+        })(0);
+      } else {
+        try { updateTrend(); } catch(e){}
+        try { fetchAdjust(); } catch(e){}
       }
-      try { updateTrend(); } catch(e) {}
-      try { fetchAdjust(); } catch(e) {}
     });
   } catch(e) {}
   // 登录后确保 K线首次加载（图表已就绪时；未就绪则 loadChartData 内 series 保护安全跳过）
