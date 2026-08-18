@@ -2182,10 +2182,14 @@ function diffKlineUpdate(oldData, newData) {
 
 async function loadChartData(bar, fit, incremental, instId) {
   if (!series) return;
-  const tf = bar || '15m';
-  const doFit = fit !== false;   // 默认 true；定时器传 false 保持用户视图
-  const chartInst = instId || S.inst_id;   // 传入则用浏览合约，否则用实际交易合约
-  const key = chartInst + ':' + tf;
+  // 防重入：K线请求进行中则跳过本次（防止慢网络下 1s 轮询堆积并发）
+  if (loadChartData._busy) return;
+  loadChartData._busy = true;
+  try {
+    const tf = bar || '15m';
+    const doFit = fit !== false;   // 默认 true；定时器传 false 保持用户视图
+    const chartInst = instId || S.inst_id;   // 传入则用浏览合约，否则用实际交易合约
+    const key = chartInst + ':' + tf;
   try {
     let url = `${API_BASE}/api/v1/candles?inst_id=${chartInst}&bar=${tf}&limit=200`;
     // 增量刷新：回退一根时段间距，确保返回当前未收盘K线（ts不变但价格在变）
@@ -2222,6 +2226,7 @@ async function loadChartData(bar, fit, incremental, instId) {
     }
     redrawLines(false);   // 增量刷新不 fitContent，不重置用户视图
   } catch (e) { console.log('chart load:', e); }
+  } finally { loadChartData._busy = false; }
 }
 
 function calcEMA(data, period) {
@@ -2384,11 +2389,14 @@ function setTf(tf, el) {
 // ═══ BASE PATH（适配 nginx 代理 /W2/ vs 本地直连）═══
 const API_BASE = location.pathname.startsWith('/W2/') ? '/W2' : '';
 async function refresh() {
+  // 防重入：上一次 refresh 未完成则跳过本次（防止慢网络下 3s 轮询堆积并发）
+  if (refresh._busy) return;
+  refresh._busy = true;
   const t0 = performance.now();
   try {
     const r = await fetch(API_BASE + '/api/v1/state');
     const d = await r.json();
-    if (!d.data) return;
+    if (!d.data) { refresh._busy = false; return; }
     const s = d.data;
     // 深度合并 state（保留嵌套对象的已有键）
     // 保存前端 inst_id（用户可能通过市场栏切换了浏览的交易对）
@@ -2713,6 +2721,7 @@ async function fetchMarketData(instId) {
       if (tk) updateMarketCells(tk);
     }
   } catch (e) { /* 静默 */ }
+  refresh._busy = false;
 }
 
 function updateMarketCells(tk) {
