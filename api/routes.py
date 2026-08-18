@@ -839,7 +839,7 @@ def register_routes(app: FastAPI):
             if after > 0:
                 # 增量：直调OKX拿最新（当前未收盘K线每秒都在变，不能走5秒缓存），
                 # 只返回 after 之后的新K线，数据量小。同时把新K线合并进缓存保留历史。
-                data = _get_client().get_candles(inst, bar, 5)
+                data = await asyncio.to_thread(_get_client().get_candles, inst, bar, 5)
                 if cache:
                     merged = {c[0]: c for c in cache["data"]}
                     for c in data:
@@ -850,7 +850,7 @@ def register_routes(app: FastAPI):
                 return {"status": "ok", "data": new_items}
             if cache and now - cache["ts"] < 5:
                 return {"status": "ok", "data": cache["data"]}
-            data = _get_client().get_candles(inst, bar, limit)
+            data = await asyncio.to_thread(_get_client().get_candles, inst, bar, limit)
         except Exception as e:
             return {"status": "error", "msg": str(e)}
         # 更新缓存（保留已有 + 新拉，按时间戳去重合并，避免增量间隙丢K线）
@@ -924,7 +924,7 @@ def register_routes(app: FastAPI):
         if not is_auth_ready() or _auth_client is None:
             return {"status": "ok", "data": {"configured": False}}
         try:
-            bal = _auth_client.get_account_balance()
+            bal = await asyncio.to_thread(_auth_client.get_account_balance)
             return {"status": "ok", "data": {"configured": True, "balance": bal}}
         except Exception as e:
             return {"status": "ok", "data": {"configured": True, "error": str(e)}}
