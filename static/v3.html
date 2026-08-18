@@ -1404,10 +1404,17 @@ button, .btn, .op-btn, .sw-btn, .preset-btn, .mode-row button {
 
 <script>
 // ═══ 加载图表库（和 test_chart.html 一样的方式）═══
+// 方案A（2026-08-18）：数据加载与图表库解耦。
+// 立即执行 main()（定义 S + 数据函数 + 启动数据轮询），图表库后台并行下载；
+// 图表库 onload 后再调 initCharts()（建 K 线图 + 首次/增量刷新）。
+// 解决首次打开"像静态页、要等一会才活"：数据不再等图表库下载完。
 (function boot() {
+  if (typeof main === 'function') {
+    try { main(); } catch (e) { console.log('boot main:', e); }
+  }
   var s = document.createElement('script');
   s.src = (location.pathname.startsWith('/W2/') ? '/W2' : '') + '/static/lightweight-charts.standalone.production.js';
-  s.onload = function () { main(); };
+  s.onload = function () { try { initCharts(); } catch (e) { console.log('boot initCharts:', e); } };
   s.onerror = function () { var c = document.getElementById('chart-container'); if (c) c.innerHTML = '<p style=color:red;padding:20px>❌ 图表库加载失败</p>'; };
   document.head.appendChild(s);
 })();
@@ -4212,7 +4219,9 @@ async function initInsts() {
 }
 
 // ═══════════════════ BOOT ═══════════════════
-initChart();
+// 方案A（2026-08-18）：数据层立即启动，不等图表库。
+// refresh/market/precheck/leverage/balance/trend 都是纯数据（0 引用图表库），
+// 页面一打开就开始拉数填充，K线由 initCharts()（图表库 onload 后）再建。
 initInsts().then(() => {
   refresh();
   fetchMarketData(S.inst_id);
@@ -4221,10 +4230,17 @@ initInsts().then(() => {
   fetchBalance();
 });
 setInterval(refresh, 3000);
-setTimeout(() => loadChartData(), 1000);
 setTimeout(() => updateTrend(), 1500);
-// K线实时刷新——每1秒增量拉最新K线（after参数只取新增，保持用户缩放/滚动视图，不重置）
-setInterval(() => { if (S.inst_id) loadChartData(S.cur_tf || '15m', false, true); }, 1000);
+
+// 图表初始化：延迟到图表库 onload 后由 boot() 触发（window 导出，boot onload 调用）
+function initCharts() {
+  if (!window.LightweightCharts) return;   // 图表库未就绪安全返回
+  initChart();
+  setTimeout(() => loadChartData(), 1000);
+  // K线实时刷新——每1秒增量拉最新K线（after参数只取新增，保持用户缩放/滚动视图，不重置）
+  setInterval(() => { if (S.inst_id) loadChartData(S.cur_tf || '15m', false, true); }, 1000);
+}
+window.initCharts = initCharts;
 // （手机端 init 已由顶层 DOMContentLoaded 触发，见 function main 之前）
 
   // 杠杆滑块松开时保存到服务端 + 模态框点击关闭
