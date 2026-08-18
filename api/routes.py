@@ -28,6 +28,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
+from starlette.requests import Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -958,6 +959,36 @@ def register_routes(app: FastAPI):
             return {"status": "ok", "data": {"logs": [], "total": 0}}
         logs = diag.get_file_logs(date=date, limit=limit)
         return {"status": "ok", "data": {"logs": logs, "total": len(logs)}}
+
+    @app.post("/api/v1/logs/frontend")
+    async def frontend_log(request: Request):
+        """前端错误/网络失败/操作审计 上报接口（免鉴权）。
+
+        前端通过 window.onerror / fetch catch / 操作回调 调用本接口，
+        把 JS 错误、网络请求失败、慢请求、操作审计写入统一诊断日志(diag)，
+        便于前后端问题在同一处追溯。payload: {type, level, msg, url, data}
+        """
+        diag = _diag()
+        if diag is None:
+            return {"status": "ok"}
+        try:
+            raw = await request.json()
+            payload = raw if isinstance(raw, dict) else {}
+            ftype = str(payload.get("type", "FRONTEND") or "FRONTEND").upper()
+            level = str(payload.get("level", "WARN") or "WARN").upper()
+            if level not in ("DEBUG", "INFO", "WARN", "ERROR"):
+                level = "WARN"
+            msg = str(payload.get("msg", "") or "")
+            url = str(payload.get("url", "") or "")
+            data = payload.get("data") or {}
+            if url:
+                msg = f"{msg} [url={url}]"
+            if not msg:
+                return {"status": "ok"}
+            diag.log(level, ftype if ftype in ("FRONTEND", "AUDIT", "NET") else "FRONTEND", msg, data=data)
+        except Exception:
+            pass
+        return {"status": "ok"}
 
     # ─── OI ───
     @app.get("/api/v1/open-interest")

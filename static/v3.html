@@ -1661,15 +1661,83 @@ var AUTH = (function() {
       if (AUTH.getToken()) opts.headers['x-auth-token'] = AUTH.getToken();
     }
     var isAuthApi = u.indexOf('/api/v1/auth/') >= 0;
+    var t0 = Date.now();
     return origFetch(url, opts).then(function(res) {
+      var el = Date.now() - t0;
+      // 慢请求告警（>5s）
+      if (el > 5000 && !isAuthApi && (u.indexOf('/W2/api/') >= 0 || u.indexOf('/api/') >= 0)) {
+        try { window._frLog && window._frLog('NET', 'WARN', '慢请求 ' + el + 'ms', u); } catch(e){}
+      }
       // token 过期/无效：401 且非登录类接口 → 清 token + 回登录页
       if (res && res.status === 401 && !isAuthApi && AUTH.isLogged()) {
+        try { window._frLog && window._frLog('AUDIT', 'WARN', 'token 过期/401', u); } catch(e){}
         AUTH.clearToken();
         location.reload();
       }
       return res;
+    }).catch(function(err) {
+      // 网络失败记录（ERR_NETWORK_CHANGED / Failed to fetch / 超时等）
+      var el2 = Date.now() - t0;
+      try {
+        window._frLog && window._frLog('NET', 'ERROR',
+          '网络请求失败: ' + (err && err.message ? err.message : String(err)) + ' (' + el2 + 'ms)', u);
+      } catch(e){}
+      throw err;  // 不吞错误，保持原行为
     });
   };
+})();
+
+// ═══════════════════ 前端日志采集（FRONTEND / NET / AUDIT）═══════════════════
+// 2026-08-18：全量日志——采集 JS 错误、网络失败、操作审计，存 localStorage + 上报后端统一 diag。
+// 任何前端异动都能在日志弹窗（分类=前端/网络/审计）追溯根因。
+(function() {
+  // 内存环 + localStorage 持久化（滚动保留最近 500 条）
+  var _buf = [];
+  var _KEY = 'gw2_frlog';
+  try {
+    var saved = localStorage.getItem(_KEY);
+    if (saved) { var arr = JSON.parse(saved); if (Array.isArray(arr)) _buf = arr.slice(-500); }
+  } catch(e){}
+  var _MAX = 500;
+  var _push = function(entry) {
+    try {
+      entry.ts = entry.ts || new Date().toISOString();
+      _buf.push(entry);
+      if (_buf.length > _MAX) _buf = _buf.slice(-_MAX);
+      try { localStorage.setItem(_KEY, JSON.stringify(_buf.slice(-200))); } catch(e){}
+    } catch(e){}
+  };
+  var _report = function(type, level, msg, url, data) {
+    var entry = { cat: type, level: level, msg: msg };
+    if (url) entry.url = url;
+    if (data) entry.data = data;
+    _push(entry);
+    // 上报后端（免鉴权接口，错误可能发生在登录前）
+    try {
+      var body = JSON.stringify({ type: type, level: level, msg: msg, url: url || '', data: data || {} });
+      var u = '/W2/api/v1/logs/frontend';
+      var p = location.pathname.startsWith('/W2/') ? '/W2' : '';
+      fetch(p + '/api/v1/logs/frontend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body })
+        .catch(function(){});  // 上报失败静默（避免递归）
+    } catch(e){}
+  };
+  // window.onerror：JS 运行时错误
+  window.addEventListener('error', function(ev) {
+    var msg = ev.message || 'JS错误';
+    var src = ev.filename || '';
+    var line = ev.lineno || 0;
+    _report('FRONTEND', 'ERROR', msg + ' @' + (src.split('/').pop() || '') + ':' + line, '', { line: line });
+  });
+  // unhandledrejection：未捕获的 Promise 错误
+  window.addEventListener('unhandledrejection', function(ev) {
+    var reason = ev.reason;
+    var msg = (reason && reason.message) ? reason.message : String(reason);
+    _report('FRONTEND', 'ERROR', 'Unhandled promise: ' + msg, '');
+  });
+  // 暴露全局接口：window._frLog(type, level, msg, url, data)
+  window._frLog = _report;
+  // 读取本地前端日志（供前端日志弹窗"前端"页签用）
+  window._frLogGet = function() { return _buf.slice(); };
 })();
 function authFetch(url, opts) {
   opts = opts || {};
@@ -1754,6 +1822,7 @@ async function doLogin() {
     var json = await res.json();
     if (!res.ok || json.status !== 'ok') { err.textContent = json.msg || '登录失败'; return; }
     AUTH.setToken(json.token, 'admin');
+    try { window._frLog && window._frLog('AUDIT', 'INFO', '管理员登录成功', '', { user: u }); } catch(e){}
     hideLogin(); refreshAfterLogin();
   } catch(e) { err.textContent = '登录请求失败: ' + e.message; }
 }
@@ -1766,6 +1835,7 @@ async function doGuest() {
     var json = await res.json();
     if (!res.ok || json.status !== 'ok') { err.textContent = json.msg || '游客进入失败'; return; }
     AUTH.setToken(json.token, 'guest');
+    try { window._frLog && window._frLog('AUDIT', 'INFO', '游客进入(只读)'); } catch(e){}
     hideLogin(); applyGuestLock(); refreshAfterLogin();
     // 游客 2 小时无操作自动登出（安全加固）
     if (typeof window.startGuestIdleWatcher === 'function') { try { window.startGuestIdleWatcher(); } catch(e) {} }
@@ -1774,6 +1844,7 @@ async function doGuest() {
 
 // 退出
 async function doLogout() {
+  try { window._frLog && window._frLog('AUDIT', 'INFO', '退出登录'); } catch(e){}
   try { await fetch('/W2/api/v1/auth/logout', { method: 'POST', headers: { 'x-auth-token': AUTH.getToken() } }); } catch(e) {}
   AUTH.clearToken();
   location.reload();
@@ -3243,6 +3314,7 @@ async function toggleSim() {
 }
 async function doToggleSim() {
   showOverlay('切换模式…');
+  try { window._frLog && window._frLog('AUDIT', 'WARN', (S.simulated ? '切换到实盘' : '切换到模拟盘')); } catch(e){}
   await callPost(API_BASE + '/api/v1/grid/demo-mode', { enabled: !S.simulated });
   // 切换后联动刷新：state / K线 / 行情条 / 预检 / 杠杆档位 / 余额（读对应模式账户）
   await Promise.all([
@@ -3518,9 +3590,11 @@ async function doBuild() {
     const r = await apiPost(API_BASE + '/api/v1/grid/start', { contracts: initContracts });
     if (r && r.status === 'error') {
       hideOverlay();
+      try { window._frLog && window._frLog('AUDIT', 'ERROR', '建仓失败: ' + (r.msg || '未知错误'), '', { inst: inst, lev: lev, contracts: initContracts }); } catch(e){}
       alert('建仓失败: ' + (r.msg || '未知错误'));
       return;
     }
+    try { window._frLog && window._frLog('AUDIT', 'INFO', '建仓成功', '', { inst: inst, lev: lev, contracts: initContracts }); } catch(e){}
     refresh();
   } catch (e) {
     hideOverlay();
@@ -3532,20 +3606,22 @@ async function doBuild() {
 
 async function doStartStop() {
   showOverlay(S.running ? '停止中…' : '启动中…');
+  try { window._frLog && window._frLog('AUDIT', 'INFO', (S.running ? '停止网格' : '启动网格')); } catch(e){}
   await callPost(API_BASE + '/api/v1/grid/' + (S.running ? 'stop' : 'start'));
   hideOverlay();
 }
-async function doStop() { showOverlay('停止中…'); await callPost(API_BASE + '/api/v1/grid/stop'); hideOverlay(); }
-async function cancelIce() { showOverlay('撤销冰山…'); await callPost(API_BASE + '/api/v1/grid/cancel-iceberg'); hideOverlay(); }
-async function doHedge() { showOverlay('对锁中…'); await callPost(API_BASE + '/api/v1/grid/hedge'); hideOverlay(); }
-async function doFlat() { showOverlay('全平中…'); await callPost(API_BASE + '/api/v1/grid/flat'); hideOverlay(); }
-async function doManualAdj() { showOverlay('手动调平…'); await callPost(API_BASE + '/api/v1/grid/adjust'); hideOverlay(); }
-async function doRecover() { showOverlay('恢复接管中…'); await callPost(API_BASE + '/api/v1/grid/recover'); hideOverlay(); }
+async function doStop() { try { window._frLog && window._frLog('AUDIT', 'INFO', '停止网格'); } catch(e){} showOverlay('停止中…'); await callPost(API_BASE + '/api/v1/grid/stop'); hideOverlay(); }
+async function cancelIce() { try { window._frLog && window._frLog('AUDIT', 'INFO', '撤销冰山'); } catch(e){} showOverlay('撤销冰山…'); await callPost(API_BASE + '/api/v1/grid/cancel-iceberg'); hideOverlay(); }
+async function doHedge() { try { window._frLog && window._frLog('AUDIT', 'INFO', '对锁'); } catch(e){} showOverlay('对锁中…'); await callPost(API_BASE + '/api/v1/grid/hedge'); hideOverlay(); }
+async function doFlat() { try { window._frLog && window._frLog('AUDIT', 'WARN', '全平'); } catch(e){} showOverlay('全平中…'); await callPost(API_BASE + '/api/v1/grid/flat'); hideOverlay(); }
+async function doManualAdj() { try { window._frLog && window._frLog('AUDIT', 'INFO', '手动调平'); } catch(e){} showOverlay('手动调平…'); await callPost(API_BASE + '/api/v1/grid/adjust'); hideOverlay(); }
+async function doRecover() { try { window._frLog && window._frLog('AUDIT', 'INFO', '恢复接管'); } catch(e){} showOverlay('恢复接管中…'); await callPost(API_BASE + '/api/v1/grid/recover'); hideOverlay(); }
 
 // ── Add capital ──
 function addCapital() {
   const v = parseFloat(document.getElementById('ctrl-reserved').value) || 0;
   if (v <= 0) { alert('请输入有效的追加金额'); return; }
+  try { window._frLog && window._frLog('AUDIT', 'INFO', '追加权益 ' + v + ' USDT'); } catch(e){}
   callPost(API_BASE + '/api/v1/grid/add-capital', { amount: v });
 }
 
@@ -3553,6 +3629,7 @@ function addCapital() {
 async function lockCapital() {
   const v = parseFloat(document.getElementById('ctrl-reserved').value) || 0;
   if (v < 0) { alert('锁定金额不能为负'); return; }
+  try { window._frLog && window._frLog('AUDIT', 'INFO', '锁定权益 ' + v + ' USDT'); } catch(e){}
   try { await apiPost(API_BASE + '/api/v1/config/params', { reserved_capital: v }); } catch (e) { console.log('lockCapital:', e); }
   S.reserved_capital = v;
   S.grid_available = (S.total_equity || 0) - v;

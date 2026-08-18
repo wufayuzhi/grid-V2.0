@@ -122,6 +122,15 @@ def check_adjust(st=None):
     # 回补进行中标记：一旦启动（_rebalance_active=True），不管失衡降到多少都坚持把剩余批次补完，
     # 直到全部批次完成或失衡 ≤ 目标，才能结束本轮（修复"批1执行后失衡回落 → 后续批次永不执行"的不收敛）。
     rebal_active = getattr(st, "_rebalance_active", False)
+    # 决策依据快照（诊断日志）：记录本次调平决策的完整输入 + 结论，便于事后复盘"为什么这么干/为什么没动"。
+    _log(st, f"[调平决策] 失衡={imbalance:.2f}% 触发阈值={trigger:.1f}% 目标={target:.1f}% "
+             f"开关={getattr(st,'use_rebalance',False)} 回补中={rebal_active} "
+             f"多={long_n}空={short_n} 权益={round(st.total_equity or 0,2)}",
+         level="DEBUG", cat="ADJUST", data={
+             "imbalance": round(imbalance, 2), "trigger": trigger, "target": target,
+             "use_rebalance": getattr(st, "use_rebalance", False), "rebal_active": rebal_active,
+             "long_n": long_n, "short_n": short_n, "equity": round(st.total_equity or 0, 2),
+             "decided": bool(getattr(st, "use_rebalance", False) and (rebal_active or imbalance >= trigger))})
     if getattr(st, "use_rebalance", False) and rebal_active:
         _do_rebalance(st, imbalance, target, _start_new_round=False)
     elif getattr(st, "use_rebalance", False) and imbalance >= trigger:
@@ -162,6 +171,14 @@ def _do_rebalance(st, imbalance, target, _start_new_round=False):
     per_batch = max(need_total // (2 * batches), 1)
     if per_batch <= 0:
         return
+    # 回补启动快照（诊断日志）：记录"为什么补这么多张"的完整输入链（净敞口→目标→每批张数）。
+    _log(st, f"[回补启动] 失衡={imbalance:.2f}%→目标{target:.1f}% 总张数={total} 净敞口={net} "
+             f"目标净敞口={target_net} 需化解={need_total} 批数={batches} 每批={per_batch} "
+             f"方向:减{heavy}加轻仓 批次号={getattr(st,'_rebalance_cur_batch',0)}/{batches}",
+         level="DEBUG", cat="REBAL", data={
+             "imbalance": round(imbalance, 2), "target": target, "total": total, "net": net,
+             "target_net": target_net, "need_total": need_total, "batches": batches,
+             "per_batch": per_batch, "heavy": heavy, "cur_batch": getattr(st, "_rebalance_cur_batch", 0)})
 
     # 续批中但已达标（失衡已 ≤ 目标）→ 提前结束本轮，不再过补（防补过头）
     if not _start_new_round and need_total == 0:

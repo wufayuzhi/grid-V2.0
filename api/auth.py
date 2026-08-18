@@ -129,7 +129,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """
 
     # 免鉴权路径前缀
-    FREE_PREFIXES = ("/api/v1/auth/", "/api/v1/auth/login", "/api/v1/auth/guest")
+    FREE_PREFIXES = ("/api/v1/auth/", "/api/v1/auth/login", "/api/v1/auth/guest",
+                     "/api/v1/logs/frontend")  # 前端错误上报：未登录时也可能发生，需免鉴权
     # 静态/登录页放行
     PASS_PREFIXES = ("/static/", "/static", "/W2/", "/W2", "/favicon.ico", "/health")
 
