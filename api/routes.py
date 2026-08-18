@@ -888,7 +888,16 @@ def register_routes(app: FastAPI):
             if after > 0:
                 # 增量：直调OKX拿最新（当前未收盘K线每秒都在变，不能走5秒缓存），
                 # 只返回 after 之后的新K线，数据量小。同时把新K线合并进缓存保留历史。
-                data = await asyncio.to_thread(_get_client().get_candles, inst, bar, 5)
+                # 快速失败：OKX 慢/超时时立即返回上次缓存，绝不重试等待（前端1秒轮询，卡几秒=用户体感卡顿）。
+                try:
+                    data = await asyncio.wait_for(
+                        asyncio.to_thread(_get_client().get_candles, inst, bar, 5),
+                        timeout=3.0)
+                except Exception:
+                    # OKX 失败/超时 → 有缓存返回缓存，无缓存返回空（不阻塞前端）
+                    if cache:
+                        return {"status": "ok", "data": []}
+                    return {"status": "error", "msg": "OKX K线超时"}
                 if cache:
                     merged = {c[0]: c for c in cache["data"]}
                     for c in data:
@@ -899,7 +908,15 @@ def register_routes(app: FastAPI):
                 return {"status": "ok", "data": new_items}
             if cache and now - cache["ts"] < 5:
                 return {"status": "ok", "data": cache["data"]}
-            data = await asyncio.to_thread(_get_client().get_candles, inst, bar, limit)
+            # 全量：OKX 慢/超时也快速失败，用缓存兜底（不阻塞前端初始化）
+            try:
+                data = await asyncio.wait_for(
+                    asyncio.to_thread(_get_client().get_candles, inst, bar, limit),
+                    timeout=5.0)
+            except Exception:
+                if cache:
+                    return {"status": "ok", "data": cache["data"]}
+                return {"status": "error", "msg": "OKX K线超时"}
         except Exception as e:
             return {"status": "error", "msg": str(e)}
         # 更新缓存（保留已有 + 新拉，按时间戳去重合并，避免增量间隙丢K线）
