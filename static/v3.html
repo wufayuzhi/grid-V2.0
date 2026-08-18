@@ -2737,10 +2737,9 @@ async function fetchBalance() {
     if (!d.data || !d.data.balance) return;
     const details = d.data.balance.details || [];
     const usdt = details.find(dt => dt.ccy === 'USDT');
-    if (usdt) {
-      document.getElementById('ctrl-total-eq').innerHTML =
-        Number(usdt.availEq || 0).toLocaleString() + ' <span class=\"cc-unit\">USDT</span>';
-    }
+    // 注(2026-08-18)：不再用交易所账户可用余额(availEq)覆盖权益卡 ctrl-total-eq。
+    // 权益卡显示网格总权益(total_equity)，由 refresh() 统一维护；availEq 是账户全部可用权益，
+    // 与网格口径不同，直接覆盖会造成权益显示错值。此函数其余逻辑保留。
   } catch (e) { /* 静默 */ }
 }
 
@@ -4251,9 +4250,10 @@ async function initInsts() {
 // - window.__dataBoot()：一次性启动全部数据拉取，供 BOOT 与顶层 refreshAfterLogin() 复用（修作用域）。
 function __dataBoot() {
   if (!AUTH.isLogged()) return;
+  // refresh() 立即独立执行：权益/持仓/状态卡秒出，不等 initInsts（adapter/state 网络慢时数据也不消失）
+  try { refresh(); } catch(e) {}
   try {
     initInsts().then(function() {
-      try { refresh(); } catch(e) {}
       if (S.inst_id) {
         try { fetchMarketData(S.inst_id); } catch(e) {}
         try { fetchPrecheck(); } catch(e) {}
