@@ -208,6 +208,17 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto Sans
 .adj-pingkong{color:#10B981;font-weight:600}
 .adj-shrink td{background:rgba(245,158,11,.16)!important}
 .adj-canceled td{background:rgba(101,102,216,.16)!important;color:#6566D8!important;font-weight:600}
+/* 调平记录筛选按钮：把圆形色标拉长成可点击按钮（显示样式不变） */
+.adj-filter{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:14px;border:1px solid transparent;cursor:pointer;font-size:11px;line-height:1.6;user-select:none;transition:all .15s}
+.adj-filter:hover{opacity:.85}
+.adj-filter.active{outline:2px solid currentColor;outline-offset:1px}
+.adj-filter-all{color:var(--t3);font-weight:600}
+.adj-filter-all.active{color:var(--c1);outline-color:currentColor}
+.adj-filter.adj-pingduo{color:#EF4444;font-weight:600}
+.adj-filter.adj-pingkong{color:#10B981;font-weight:600}
+.adj-filter.adj-shrink{color:#F59E0B;font-weight:600}
+.adj-filter.adj-canceled{color:#6566D8;font-weight:600}
+
 .adj-filled td{background:rgba(16,185,129,.18)!important}
 .adj-other{color:#6B7280}
 /* 混合组(一成交一撤销)里的撤销行整行文字 PANTONE 272C，用户2026-08-09定 */
@@ -3125,19 +3136,48 @@ function adjRow(r, showInst) {
 }
 function adjStatsHtml(stats) {
   stats = stats || {};
-  return `<b class="adj-pingduo">🔴开空平多 ${stats.pingduo_kaikong || 0}次</b>` +
-         `<b class="adj-pingkong">🟢开多平空 ${stats.pingkong_kaiduo || 0}次</b>` +
-         `<span class="adj-shrink">🟡纯缩仓 ${stats.shrink || 0}次</span>` +
-         `<span class="adj-canceled">🔵撤销单 ${stats.canceled || 0}次</span>`;
+  const cur = window._adjustFilter || 'all';
+  const btn = (cls, type, label) =>
+    `<span class="adj-filter ${cls} ${cur === type ? 'active' : ''}" onclick="filterAdjust('${type}')">${label}</span>`;
+  return `<span class="adj-filter adj-filter-all ${cur === 'all' ? 'active' : ''}" onclick="filterAdjust('all')">全部 ${(stats.pingduo_kaikong||0)+(stats.pingkong_kaiduo||0)+(stats.shrink||0)+(stats.canceled||0)}组</span>` +
+         btn('adj-pingduo', 'pingduo_kaikong', `🔴开空平多 ${stats.pingduo_kaikong || 0}次`) +
+         btn('adj-pingkong', 'pingkong_kaiduo', `🟢开多平空 ${stats.pingkong_kaiduo || 0}次`) +
+         btn('adj-shrink', 'shrink', `🟡纯缩仓 ${stats.shrink || 0}次`) +
+         btn('adj-canceled', 'canceled', `🔵撤销单 ${stats.canceled || 0}次`);
+}
+function filterAdjust(type) {
+  window._adjustFilter = (window._adjustFilter === type) ? 'all' : type;
+  const data = window._adjustAll || { records: [], stats: {} };
+  // 同时刷新卡片 + 弹窗
+  const sEl = document.getElementById('adj-stats');
+  if (sEl) sEl.innerHTML = adjStatsHtml(data.stats);
+  const tbody = document.getElementById('adj-tbl')?.querySelector('tbody');
+  if (tbody) {
+    const recs = _filterAdjustRecords(data.records || [], window._adjustFilter);
+    tbody.innerHTML = recs.length ? recs.slice(0,3).map(r => adjRow(r, false)).join('')
+      : '<tr><td colspan="7" style="text-align:center;color:var(--t3)">无该类型记录</td></tr>';
+  }
+  const msEl = document.getElementById('adj-modal-stats');
+  if (msEl) msEl.innerHTML = adjStatsHtml(data.stats);
+  const mtbody = document.getElementById('adj-modal-tbl')?.querySelector('tbody');
+  if (mtbody) {
+    const recs = _filterAdjustRecords(data.records || [], window._adjustFilter);
+    mtbody.innerHTML = recs.length ? recs.map(r => adjRow(r, true)).join('')
+      : '<tr><td colspan="7" style="text-align:center;color:var(--t3)">无该类型记录</td></tr>';
+  }
+}
+function _filterAdjustRecords(records, type) {
+  if (!type || type === 'all') return records;
+  return records.filter(r => (r.group || '') === type);
 }
 function renderAdjust(data) {
   const sEl = document.getElementById('adj-stats');
   if (sEl) sEl.innerHTML = adjStatsHtml(data.stats);
   const tbody = document.getElementById('adj-tbl')?.querySelector('tbody');
   if (!tbody) return;
-  const recs = data.recent || [];
+  const recs = _filterAdjustRecords(data.recent || [], window._adjustFilter);
   tbody.innerHTML = recs.length ? recs.map(r => adjRow(r, false)).join('')
-    : '<tr><td colspan="7" style="text-align:center;color:var(--t3)">无数据</td></tr>';
+    : '<tr><td colspan="7" style="text-align:center;color:var(--t3)">无该类型记录</td></tr>';
   const btn = document.getElementById('adj-expand');
   if (btn) { btn.style.display = ''; btn.textContent = '📋 全部调平记录 (' + (data.total || 0) + '组)'; }
   window._adjustAll = { records: data.records || [], stats: data.stats || {} };
@@ -3147,7 +3187,7 @@ function openAdjustModal() {
   const sEl = document.getElementById('adj-modal-stats');
   if (sEl) sEl.innerHTML = adjStatsHtml(data.stats);
   const tbody = document.getElementById('adj-modal-tbl')?.querySelector('tbody');
-  if (tbody) tbody.innerHTML = data.records.map(r => adjRow(r, true)).join('');
+  if (tbody) tbody.innerHTML = _filterAdjustRecords(data.records || [], window._adjustFilter).map(r => adjRow(r, true)).join('');
   const m = document.getElementById('adj-modal');
   if (m) m.classList.add('show');
 }

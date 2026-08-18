@@ -504,6 +504,54 @@ def _serialize_adjust(st):
     }
 
 
+def _merge_canceled_records(st):
+    """从订单历史识别「4方向整组全部撤销」的撤销单，合并进 st.adjust_records。
+
+    账单(bills)只有成交流水、没有撤销流水 → 撤销单只能从订单历史(orders-history)识别。
+    规则(用户2026-08-18确认)：
+      - 只显示「同一调平动作组内4方向全部撤销(全未成交)」的记录 → _classify_group 返回 canceled
+      - 显示方式合并为🔴开空/平多、🟢开多/平空（_build_record 的 canceled 分支）
+      - 成交单仍由账单清洗生成，这里只追加 canceled，绝不动成交单。
+    幂等：按 (ts, group, ord_ids) 去重，避免与账单记录冲突/重复。
+    """
+    cli = get_auth_client() if get_auth_client else None
+    if not cli or not (is_auth_ready() if is_auth_ready else False):
+        return
+    try:
+        inst = getattr(st, "inst_id", "")
+        hist = cli.get_order_history(inst, limit=100)
+    except Exception:
+        return
+    if not hist:
+        return
+    bt = getattr(st, "build_ts", 0.0) or 0.0
+    canceled_recs = []
+    try:
+        for g in _group_orders(hist or []):
+            gtype = _classify_group(g)
+            # 只取整组全部撤销的组
+            if gtype != "canceled":
+                continue
+            rec = _build_record(g, gtype)
+            # build_ts 过滤本次建仓后（rec.ts 毫秒 vs build_ts 秒）
+            if bt > 0 and _to_f(rec.get("ts", 0)) < bt * 1000.0:
+                continue
+            canceled_recs.append(rec)
+    except Exception as _e:
+        import logging
+        logging.getLogger("routes").warning(f"撤销单识别失败: {_e}")
+        return
+    if not canceled_recs:
+        return
+    # 去重合并：已有记录按 (ts, group) 标记，避免与账单生成的撤销记录(理论上没有)重复
+    existing_keys = {(_to_f(r.get("ts", 0)), r.get("group", "")) for r in st.adjust_records}
+    to_add = [r for r in canceled_recs
+              if (_to_f(r.get("ts", 0)), r.get("group", "")) not in existing_keys]
+    if to_add:
+        st.adjust_records = (st.adjust_records + to_add)[-300:]
+
+
+
 def _recalc_formula_details(st):
     """更新 calc_details 用于前端公式展示（不改变持仓，仅计算）。"""
     try:
@@ -1899,6 +1947,10 @@ def register_routes(app: FastAPI):
         except Exception as _e:
             import logging
             logging.getLogger("routes").exception(f"adjust-history 账单清洗失败: {_e}")
+        # 撤销单补充：账单(bills)只有成交流水、没有撤销流水 → 撤销单从订单历史识别。
+        # 规则(用户2026-08-18确认)：只显示「4方向整组全部撤销(全未成交)」的撤销单，显示方式合并为🔴开空/平多、🟢开多/平空。
+        # 成交单仍由账单权威清洗生成(不动)；这里只追加 canceled 记录，避免重复/覆盖成交单。
+        _merge_canceled_records(st)
         return {"status": "ok", "data": _serialize_adjust(st)}
 
     # ═══ 企微通知配置（前端可配置：长链接/群推送/大模型）═══
