@@ -1729,7 +1729,7 @@ async function doLogin() {
     var json = await res.json();
     if (!res.ok || json.status !== 'ok') { err.textContent = json.msg || '登录失败'; return; }
     AUTH.setToken(json.token, 'admin');
-    hideLogin(); refresh();
+    hideLogin(); refreshAfterLogin();
   } catch(e) { err.textContent = '登录请求失败: ' + e.message; }
 }
 
@@ -1741,7 +1741,7 @@ async function doGuest() {
     var json = await res.json();
     if (!res.ok || json.status !== 'ok') { err.textContent = json.msg || '游客进入失败'; return; }
     AUTH.setToken(json.token, 'guest');
-    hideLogin(); applyGuestLock(); refresh();
+    hideLogin(); applyGuestLock(); refreshAfterLogin();
   } catch(e) { err.textContent = '游客进入失败: ' + e.message; }
 }
 
@@ -1756,6 +1756,20 @@ async function doLogout() {
 function hideLogin() {
   var ov = document.getElementById('login-overlay');
   if (ov) ov.style.display = 'none';
+}
+
+// 登录/游客进入成功后：补拉所有一次性数据（避免页面加载时未登录发起的 401 请求没重试，导致余额/行情/预检/杠杆不刷新）
+function refreshAfterLogin() {
+  try { refresh(); } catch(e) {}
+  if (S.inst_id) {
+    try { fetchMarketData(S.inst_id); } catch(e) {}
+    try { fetchPrecheck(); } catch(e) {}
+    try { fetchLeverOptions(); } catch(e) {}
+    try { fetchBalance(); } catch(e) {}
+  }
+  try { updateTrend(); } catch(e) {}
+  try { loadChartData(); } catch(e) {}
+  try { fetchAdjust(); } catch(e) {}
 }
 
 // 页面加载时初始化登录状态
