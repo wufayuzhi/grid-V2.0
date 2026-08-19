@@ -85,6 +85,13 @@ def execute_start_grid(contracts: int = 0) -> dict:
     px = get_mark_px()
     if px <= 0:
         return {"status": "error", "msg": "无行情数据"}
+    # 🔴模块A a5：行情陈旧(WS+REST均停更>15s)绝不用脏价建仓——宁可错过不冒险
+    try:
+        from data.ticker import market_is_stale
+        if market_is_stale(getattr(st, "inst_id", "")):
+            return {"status": "error", "msg": "行情降级(数据陈旧>15s)，拒绝建仓，请等待行情恢复"}
+    except Exception:
+        pass
 
     # 查交易所最大下单量
     client = get_auth_client()

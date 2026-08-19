@@ -126,6 +126,14 @@ def rebalance_batch(heavy: str, n: int, use_limit: bool = True) -> dict:
         return {"status": "error", "msg": "认证客户端未就绪"}
     inst = st.inst_id
 
+    # 🔴模块A a5：行情陈旧(WS+REST均停更>15s)绝不用脏价调平挂单——宁可错过不冒险
+    try:
+        from data.ticker import market_is_stale
+        if market_is_stale(inst):
+            return {"status": "error", "msg": "行情降级(数据陈旧>15s)，拒绝调平挂单，请等待行情恢复"}
+    except Exception:
+        pass
+
     # 盘口价：优先用行情缓存 bid/ask，回退 mark
     _px = {"bid": st.position.mark_px, "ask": st.position.mark_px}
     try:

@@ -197,6 +197,14 @@ def _trigger_decision():
         return
 
     # 安全距离实时更新（前端真实值，不再是恒999）
+    # 🔴模块A a5：行情降级告警(WS+REST均断线>15s)——安全距离/风控基于陈旧mark_px，提醒用户。
+    # 不阻断风控判断(避免漏判真实风险，且旧mark_px是保守方向)；仅告警。
+    try:
+        from data.ticker import market_is_stale
+        if market_is_stale(getattr(st, "inst_id", "")):
+            logger.warning(f"⚠️ 行情降级(数据陈旧>15s) inst={st.inst_id}，安全距离/风控基于陈旧标记价，请检查网络")
+    except Exception:
+        pass
     from formulas.safety import calc_safety_distance
     p = st.position
     st.safety_distance_pct = round(calc_safety_distance(
