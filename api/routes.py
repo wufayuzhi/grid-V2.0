@@ -1042,29 +1042,37 @@ def register_routes(app: FastAPI):
     @app.get("/api/v1/candles")
     async def get_candles(inst_id: str = "", bar: str = "15m", limit: int = 100,
                           after: int = 0):
-        """K线：支持增量拉取 + 短缓存。
-        - limit>0 全量拉最近N根（切币种/时段初始化用）
-        - after>0  增量：只返回该时间戳之后的K线（前端1秒刷新用，省流量省OKX请求）
-        缓存：同 key 5秒内复用，避免1秒刷新每次都直调OKX。
+        """K线（模块A 2026-08-19）：优先读后端 WS candle 缓存(毫秒级实时,本地秒回,不碰OKX)。
+        前端1秒轮询 → 读缓存秒回，OKX candles 请求近乎归零(429根治)。
+        WS缓存未就绪(启动/切tf未首拉)时触发 REST 首拉；异常时 fallback 直调OKX(原逻辑)。
         """
         st = get_state()
         inst = inst_id or getattr(st, "inst_id", "")
         if not inst:
             return {"status": "error", "msg": "未选择交易对"}
+        # ── 模块A主路径：读 WS candle 缓存 ──
+        try:
+            from data.ticker import get_candle_cache, init_candle_cache
+            bars = get_candle_cache(inst, bar)
+            if not bars:
+                init_candle_cache(inst, bar)
+                bars = get_candle_cache(inst, bar)
+            if after > 0:
+                return {"status": "ok", "data": [c for c in bars if int(c[0]) > after]}
+            return {"status": "ok", "data": (bars[-limit:] if limit > 0 else bars)}
+        except Exception as _we:
+            pass  # 缓存层异常 → 走下方 fallback 直调 OKX
+        # ── fallback：直调OKX(原逻辑,缓存层异常时兜底) ──
         import time as _t
         cache = _CANDLE_CACHE.get(inst, {}).get(bar)
         now = _t.time()
         try:
             if after > 0:
-                # 增量：直调OKX拿最新（当前未收盘K线每秒都在变，不能走5秒缓存），
-                # 只返回 after 之后的新K线，数据量小。同时把新K线合并进缓存保留历史。
-                # 快速失败：OKX 慢/超时时立即返回上次缓存，绝不重试等待（前端1秒轮询，卡几秒=用户体感卡顿）。
                 try:
                     data = await asyncio.wait_for(
                         asyncio.to_thread(_get_client().get_candles, inst, bar, 5),
                         timeout=3.0)
                 except Exception:
-                    # OKX 失败/超时 → 有缓存返回缓存，无缓存返回空（不阻塞前端）
                     if cache:
                         return {"status": "ok", "data": []}
                     return {"status": "error", "msg": "OKX K线超时"}
@@ -1078,7 +1086,6 @@ def register_routes(app: FastAPI):
                 return {"status": "ok", "data": new_items}
             if cache and now - cache["ts"] < 5:
                 return {"status": "ok", "data": cache["data"]}
-            # 全量：OKX 慢/超时也快速失败，用缓存兜底（不阻塞前端初始化）
             try:
                 data = await asyncio.wait_for(
                     asyncio.to_thread(_get_client().get_candles, inst, bar, limit),
@@ -1089,7 +1096,6 @@ def register_routes(app: FastAPI):
                 return {"status": "error", "msg": "OKX K线超时"}
         except Exception as e:
             return {"status": "error", "msg": str(e)}
-        # 更新缓存（保留已有 + 新拉，按时间戳去重合并，避免增量间隙丢K线）
         if cache:
             merged = {c[0]: c for c in cache["data"]}
             for c in data:
@@ -1097,6 +1103,24 @@ def register_routes(app: FastAPI):
             data = sorted(merged.values(), key=lambda x: int(x[0]), reverse=True)[:max(limit, 300)]
         _CANDLE_CACHE.setdefault(inst, {})[bar] = {"data": data, "ts": now}
         return {"status": "ok", "data": data}
+
+    @app.post("/api/v1/market/ws_tf")
+    async def set_ws_tf(tf: str = "1m"):
+        """模块A：前端切K线时间框架时通知后端更新 WS candle 订阅(触发重订阅)。"""
+        st = get_state()
+        if st is None or not tf:
+            return {"status": "error", "msg": "缺 tf"}
+        import re as _re
+        if not _re.fullmatch(r"\d+[mHhDdWw]", tf):
+            return {"status": "error", "msg": f"非法tf: {tf}"}
+        setattr(st, "ws_candle_tf", tf)
+        try:
+            from state import save_state
+            save_state()
+        except Exception:
+            pass
+        logger.info(f"ws_candle_tf → {tf}")
+        return {"status": "ok", "data": {"tf": tf}}
 
     # ─── 日志 ───
     @app.get("/api/v1/logs")

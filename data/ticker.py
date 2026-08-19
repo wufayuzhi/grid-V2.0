@@ -113,6 +113,8 @@ def apply_ticker(inst_id: str, raw: dict) -> dict | None:
             "bid_px": _safe_float(raw.get("bidPx")),
             "ask_px": _safe_float(raw.get("askPx")),
             "markPx": mark_px,  # 兼容旧契约字段名
+            "ts": time.time(),
+            "src": "rest",
         }
         _ticker_cache[inst_id] = entry
 
@@ -290,3 +292,185 @@ def get_ticker_cache() -> list[dict]:
     内部用 dict 存储（{inst_id: entry}），对外返回 list 供 routes 迭代。
     """
     return list(_ticker_cache.values())
+
+
+# ═══ WS 推送更新层（模块A：OKX WebSocket 公共频道实时行情 → 统一缓存）═══
+# 与 REST 走同一个 _ticker_cache，WS 主通道(毫秒级) + 低频REST 5s并线兜底(时间戳并线取最新)。
+# 每个 entry 带 ts(更新时间) / src(ws|rest)，供 stale 校验与交易用价保护。
+
+# 标记价/最新价 stale 阈值(秒)：超过视为行情卡住(WS断线未兜底)，调用方须降级保护
+MARK_STALE_TS = 15.0
+
+
+def _new_entry(inst_id: str) -> dict:
+    """取或初始化某合约的行情 entry（WS 更新复用，避免覆盖 REST 已填字段）。"""
+    e = _ticker_cache.get(inst_id)
+    if e is None:
+        e = {"inst_id": inst_id, "ts": 0.0, "src": "none"}
+        _ticker_cache[inst_id] = e
+    return e
+
+
+def apply_ws_ticker(inst_id: str, d: dict) -> None:
+    """OKX WS tickers 频道推送 → 更新最新价/24h高低/量/额/买卖盘口(并算涨跌/振幅)。"""
+    try:
+        last = _safe_float(d.get("last"))
+        if last <= 0:
+            return
+        e = _new_entry(inst_id)
+        open24h = _safe_float(d.get("open24h"))
+        high24h = _safe_float(d.get("high24h"))
+        low24h = _safe_float(d.get("low24h"))
+        vol_ccy = _safe_float(d.get("volCcy24h"))
+        e["last_px"] = last
+        e["last"] = last
+        e["high24h"] = high24h
+        e["low24h"] = low24h
+        e["vol24h"] = _safe_float(d.get("vol24h"))
+        e["volCcy24h"] = vol_ccy
+        e["vol_ccy_24h"] = vol_ccy * last
+        e["bid_px"] = _safe_float(d.get("bidPx"))
+        e["ask_px"] = _safe_float(d.get("askPx"))
+        if open24h > 0:
+            e["change_24h_pct"] = round((last - open24h) / open24h * 100, 2)
+            e["amplitude_24h_pct"] = round((high24h - low24h) / open24h * 100, 2)
+        e["ts"] = time.time()
+        e["src"] = "ws"
+        _sync_state(inst_id, e)
+    except Exception as ex:
+        logger.warning(f"apply_ws_ticker: {ex}")
+
+
+def apply_ws_mark_px(inst_id: str, d: dict) -> None:
+    """OKX WS mark-price 频道推送 → 更新标记价(交易用价主源，独立于最新价)。"""
+    try:
+        mark = _safe_float(d.get("markPx"))
+        if mark <= 0:
+            return
+        e = _new_entry(inst_id)
+        e["mark_px"] = mark
+        e["markPx"] = mark
+        e["ts"] = time.time()
+        e["src"] = "ws"
+        _sync_state(inst_id, e)
+    except Exception as ex:
+        logger.warning(f"apply_ws_mark_px: {ex}")
+
+
+def apply_ws_idx_px(inst_id: str, d: dict) -> None:
+    """OKX WS index-tickers 频道推送 → 更新指数价。"""
+    try:
+        idx = _safe_float(d.get("idxPx"))
+        if idx <= 0:
+            return
+        e = _new_entry(inst_id)
+        e["idxPx"] = idx
+        e["ts"] = time.time()
+        e["src"] = "ws"
+        _sync_state(inst_id, e)
+    except Exception as ex:
+        logger.warning(f"apply_ws_idx_px: {ex}")
+
+
+def apply_ws_oi(inst_id: str, d: dict) -> None:
+    """OKX WS open-interest 频道推送 → 更新 OI 缓存与历史。"""
+    try:
+        val = _safe_float(d.get("oi"))
+        if val <= 0:
+            return
+        _oi_cache[inst_id] = {"oi": val, "oi_currency": d.get("oiCcy", "")}
+        hist = _oi_history.setdefault(inst_id, [])
+        hist.append(val)
+        st = get_state()
+        if len(hist) > st.oi_history_size:
+            _oi_history[inst_id] = hist[-st.oi_history_size:]
+    except Exception as ex:
+        logger.warning(f"apply_ws_oi: {ex}")
+
+
+def _sync_state(inst_id: str, e: dict) -> None:
+    """若更新的是当前合约，同步到 state(标记价/最新价/振幅/DR)。"""
+    try:
+        st = get_state()
+        if inst_id != st.inst_id:
+            return
+        mark = e.get("mark_px") or e.get("markPx") or 0.0
+        last = e.get("last_px") or 0.0
+        if mark > 0:
+            st.position.mark_px = mark
+        if last > 0:
+            st.position.last_px = last
+        amp = e.get("amplitude_24h_pct", 0) or 0
+        if amp:
+            st.coin_amplitude_24h = amp
+            chg = e.get("change_24h_pct", 0) or 0
+            st.dr_24h = abs(chg) / amp if amp > 0 else 0.0
+    except Exception as ex:
+        logger.warning(f"_sync_state: {ex}")
+
+
+# ─── K线缓存（WS candle 频道增量 + REST 首拉初始化）───
+
+# K线缓存：{inst_id: {"tf": str, "bars": [[ts,o,h,l,c,vol,...]], "ts": float}}
+_candle_cache: dict[str, dict] = {}
+
+
+def init_candle_cache(inst_id: str, tf: str, limit: int = 300) -> None:
+    """REST 首拉历史K线初始化缓存（启动/切币/切tf时调用），后续由 WS 增量更新。"""
+    try:
+        raw = get_client().get_candles(inst_id, bar=tf, limit=limit)
+        if not raw:
+            return
+        _candle_cache[inst_id] = {"tf": tf, "bars": list(raw), "ts": time.time()}
+        logger.info(f"init_candle_cache({inst_id},{tf}) 首拉 {len(raw)} 根")
+    except Exception as ex:
+        logger.warning(f"init_candle_cache({inst_id},{tf}): {ex}")
+
+
+def apply_ws_candle(inst_id: str, d: list, tf: str) -> None:
+    """OKX WS candle 频道推送(单根K线, 同ts替换/新ts追加) → 维护滚动K线缓存。"""
+    try:
+        limit = int(getattr(get_state(), "candle_ws_limit", 300) or 300)
+        cc = _candle_cache.get(inst_id)
+        if cc is None or cc.get("tf") != tf:
+            cc = {"tf": tf, "bars": [], "ts": 0.0}
+            _candle_cache[inst_id] = cc
+        bars = cc["bars"]
+        new_ts = d[0]
+        replaced = False
+        for i, b in enumerate(bars):
+            if b[0] == new_ts:
+                bars[i] = d
+                replaced = True
+                break
+        if not replaced:
+            bars.append(d)
+        if len(bars) > limit:
+            cc["bars"] = bars[-limit:]
+        cc["ts"] = time.time()
+    except Exception as ex:
+        logger.warning(f"apply_ws_candle: {ex}")
+
+
+def get_candle_cache(inst_id: str, tf: str) -> list:
+    """获取指定合约/时间框架的K线缓存(空=未初始化/切tf后未首拉)。"""
+    cc = _candle_cache.get(inst_id)
+    if cc and cc.get("tf") == tf:
+        return cc["bars"]
+    return []
+
+
+# ─── stale 校验（交易用价保护，模块A 🔴）───
+
+
+def get_entry(inst_id: str) -> dict | None:
+    """取某合约行情 entry。"""
+    return _ticker_cache.get(inst_id)
+
+
+def market_is_stale(inst_id: str, max_age: float = MARK_STALE_TS) -> bool:
+    """当前行情是否超过 max_age 秒未更新(WS+REST均断线/卡住)。"""
+    e = _ticker_cache.get(inst_id)
+    if e is None or not e.get("ts"):
+        return True
+    return (time.time() - e["ts"]) > max_age

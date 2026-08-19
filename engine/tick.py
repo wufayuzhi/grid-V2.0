@@ -53,6 +53,14 @@ async def data_loop():
     单 worker 串行执行，state 不会被并发写。
     """
     loop = asyncio.get_event_loop()
+    # 模块A：启动 WS 行情订阅后台任务（主通道，毫秒级实时；断线/切币/切tf自动处理）
+    #   与下方 _refresh_ticker(REST) 并线：WS 主推 + 低频REST 兜底，缓存时间戳并线取最新。
+    try:
+        from engine.ws_market import start_ws_task
+        start_ws_task(loop)
+        logger.info("WS行情订阅后台任务已启动")
+    except Exception as e:
+        logger.warning(f"WS行情订阅启动失败(走REST兜底): {e}")
     # 引擎启动时自动回填网格统计(滚动/已实现/手续费，从交易所订单历史权威计算)
     try:
         from engine.grid import backfill_grid_stats
