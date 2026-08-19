@@ -705,6 +705,176 @@ def register_routes(app: FastAPI):
         _recalc_formula_details(st)
         return {"status": "ok", "data": _state_dict(st)}
 
+    # ─── 聚合接口（首屏一次拉全，2026-08-19）───
+    # 目的：把登录首屏从「7 个请求并发/串行」压成「1 个请求秒开」。
+    # 全部复用现有序列化（_state_dict / ticker缓存 / precheck公式 / trend缓存 / pending / adjust缓存），
+    # 与单接口形状完全一致，前端渲染零改动。live 调用各自包 asyncio.to_thread + wait_for(8s) + 逐字段兜底，
+    # 任一字段超时只降级自己，绝不让整个接口挂住。全部只读，不动建仓/平仓/撤单/状态。
+    @app.get("/api/v1/bootstrap")
+    async def bootstrap():
+        st = get_state()
+        _recalc_formula_details(st)
+        data = {"ts": int(time.time() * 1000)}
+
+        # 1) state —— 读缓存（tick 每 2s 已刷好）
+        try:
+            data["state"] = _state_dict(st)
+        except Exception as e:
+            data["state"] = {}
+            logger.warning(f"bootstrap state 失败: {e}")
+
+        # 2) market —— 当前合约行情（读 ticker 缓存，不强制刷新 OKX）
+        try:
+            cur_inst = getattr(st, "inst_id", "")
+            mk = None
+            for t in get_ticker_cache() or []:
+                if t.get("inst_id") == cur_inst:
+                    mk = dict(t)
+                    break
+            _mp = get_mark_px() if get_mark_px else None
+            data["market"] = {"tickers": [mk] if mk else [], "mark_px": (_mp if _mp is not None else 0)}
+        except Exception:
+            data["market"] = {"tickers": [], "mark_px": 0}
+
+        # 3) balance —— live，带超时
+        try:
+            _ac = get_auth_client() if get_auth_client else None
+            _ar = is_auth_ready() if is_auth_ready else False
+            if not _ar or _ac is None:
+                data["balance"] = {"configured": False}
+            else:
+                bal = await asyncio.wait_for(asyncio.to_thread(_ac.get_account_balance), timeout=8)
+                data["balance"] = {"configured": True, "balance": bal}
+        except asyncio.TimeoutError:
+            data["balance"] = {"configured": True, "error": "timeout"}
+        except Exception as e:
+            data["balance"] = {"configured": True, "error": str(e)}
+
+        # 4) precheck —— live get_max_size，带超时；公式与 precheck_grid 同源
+        try:
+            inst = getattr(st, "inst_id", "")
+            lev = getattr(st, "leverage", 20)
+            px = get_mark_px() if get_mark_px else 0
+            res = {
+                "inst_id": inst, "leverage": lev, "mark_px": px_round(inst, px),
+                "formula_ct": 0, "max_ct": 0, "max_per_side": 0,
+                "single_limit": 0, "safety_open": 0, "error": "",
+            }
+            if px <= 0:
+                res["error"] = "无行情数据"
+            else:
+                ct_val = getattr(st, "ct_val", 0.1)
+                grid_cap = _grid_available(st)
+                total_eq = getattr(st, "total_equity", 0) or 1
+                _ac = get_auth_client() if get_auth_client else None
+                _ar = is_auth_ready() if is_auth_ready else False
+                if _ar and _ac:
+                    try:
+                        max_info = await asyncio.wait_for(
+                            asyncio.to_thread(_ac.get_max_size, inst, leverage=lev, px=px), timeout=8)
+                        max_buy = int(float(max_info.get("maxBuy", "0") or "0"))
+                        max_sell = int(float(max_info.get("maxSell", "0") or "0"))
+                        res["max_buy"] = max_buy
+                        res["max_sell"] = max_sell
+                        if max_buy > 0 and max_sell > 0:
+                            max_per_side = min(max_buy, max_sell)
+                            res["max_ct"] = max_per_side
+                            res["max_per_side"] = max_per_side
+                            res["max_detail"] = f"getMaxSize: maxBuy={max_buy}, maxSell={max_sell} → 每边最多{max_per_side}张"
+                        else:
+                            blocked = "买" if max_buy <= 0 else ("卖" if max_sell <= 0 else "")
+                            max_per_side = 0
+                            res["max_ct"] = 0
+                            res["max_per_side"] = 0
+                            res["blocked"] = blocked
+                            res["max_detail"] = f"getMaxSize: maxBuy={max_buy}, maxSell={max_sell} → {blocked}方向当前不可开"
+                    except asyncio.TimeoutError:
+                        res["error"] = "查询限额超时"
+                        max_per_side = 1
+                    except Exception as e:
+                        res["error"] = f"查询限额失败: {e}"
+                        max_per_side = 1
+                else:
+                    max_per_side = 1
+                single_limit = int((max_per_side / 2) * (grid_cap / total_eq))
+                safety_open = int(single_limit * getattr(st, "safety_factor", 0.7))
+                res["single_limit"] = max(single_limit, 1)
+                res["safety_open"] = max(safety_open, 1)
+                res["formula_ct"] = res["safety_open"]
+                res["formula_detail"] = (f"单边极限={res['single_limit']}张 (=({max_per_side}/2)×{grid_cap:.0f}/{total_eq:.0f}), "
+                                         f"安全开仓={res['safety_open']}张 (×{getattr(st,'safety_factor',0.7)})")
+            data["precheck"] = res
+        except Exception:
+            data["precheck"] = {}
+
+        # 5) leverage_options —— 复用缓存路径（避免重复 OKX 调用）
+        try:
+            data["leverage_options"] = (await leverage_options()).get("data", {})
+        except Exception:
+            data["leverage_options"] = {}
+
+        # 6) trend —— 读缓存（需刷新时才刷新）
+        try:
+            from engine.trend import get_trend_info, force_refresh, _should_refresh, _trend_cache
+            inst_id = getattr(st, "inst_id", "")
+            if inst_id and (_should_refresh(inst_id) or _trend_cache.get("inst_id") != inst_id):
+                force_refresh(inst_id)
+            data["trend"] = get_trend_info()
+        except Exception:
+            data["trend"] = {}
+
+        # 7) pending —— live，带超时
+        try:
+            _cli = get_auth_client() if get_auth_client else None
+            if _cli is None:
+                data["pending"] = []
+            else:
+                pend = await asyncio.wait_for(
+                    asyncio.to_thread(_cli.get_orders_pending, getattr(st, "inst_id", "")), timeout=8)
+                ct_val = getattr(st, "ct_val", 0.1)
+                rows = []
+                for o in pend:
+                    px = _to_f(o.get("px"))
+                    sz = _to_f(o.get("sz"))
+                    notional = o.get("notionalUsd")
+                    val = _to_f(notional) if notional else px * sz * ct_val
+                    rows.append({
+                        "inst_id": o.get("instId"),
+                        "time_str": _fmt_ms(_to_f(o.get("cTime"))),
+                        "side": o.get("side"),
+                        "pos_side": o.get("posSide"),
+                        "px": px, "sz": sz,
+                        "tick_sz": _safe_tick_sz(o.get("instId", "")),
+                        "acc_fill_sz": _to_f(o.get("accFillSz")),
+                        "value": round(val, 2),
+                        "state": o.get("state"),
+                        "ord_type": o.get("ordType"),
+                        "ord_id": o.get("ordId"),
+                    })
+                data["pending"] = rows
+        except asyncio.TimeoutError:
+            data["pending"] = []
+        except Exception:
+            data["pending"] = []
+
+        # 8) adjust_records —— 后端缓存，不重跑账单翻页（防卡/防限流）
+        try:
+            data["adjust_records"] = (getattr(st, "adjust_records", None) or [])[-300:]
+        except Exception:
+            data["adjust_records"] = []
+
+        # 9) insts —— 可用合约列表
+        try:
+            _av = get_available_inst_ids() if get_available_inst_ids else set()
+            if _av:
+                data["insts"] = sorted(_av)
+            else:
+                data["insts"] = sorted({t.get("inst_id") for t in (get_ticker_cache() or []) if t.get("inst_id")})
+        except Exception:
+            data["insts"] = []
+
+        return {"status": "ok", "data": data}
+
     # ─── 行情 ───
     @app.get("/api/v1/market")
     async def get_market(inst_id: str = ""):

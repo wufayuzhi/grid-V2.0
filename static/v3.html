@@ -2709,12 +2709,10 @@ function updatePos(side, pos, mark) {
 }
 
 // ═══════════════════ MARKET DATA ═══════════════════
-async function fetchMarketData(instId) {
+async function fetchMarketData(instId, preloaded) {
   try {
-    // 带 inst_id 时后端会强制刷新该币行情，确保切换后立即有数据
     const q = instId ? '?inst_id=' + encodeURIComponent(instId) : '';
-    const r = await fetch(API_BASE + '/api/v1/market' + q);
-    const d = await r.json();
+    const d = preloaded ? { data: preloaded } : await (await fetch(API_BASE + '/api/v1/market' + q)).json();
     if (d.data && d.data.tickers) {
       _marketTickers = d.data.tickers;
       const tk = d.data.tickers.find(t => t.inst_id === instId) || d.data.tickers[0];
@@ -2754,12 +2752,11 @@ function updateMarketCells(tk) {
 }
 
 // ═══════════════════ PRECHECK / LEVERAGE / BALANCE ═══════════════════
-async function fetchPrecheck() {
+async function fetchPrecheck(preloaded) {
   try {
     const lev = parseInt(document.getElementById('lev-slider').value) || 20;
     const inst = S.inst_id;
-    const r = await fetch(API_BASE + '/api/v1/grid/precheck?inst_id=' + inst + '&leverage=' + lev);
-    const d = await r.json();
+    const d = preloaded ? { data: preloaded } : await (await fetch(API_BASE + '/api/v1/grid/precheck?inst_id=' + inst + '&leverage=' + lev)).json();
     if (!d.data) return;
     const pc = d.data;
     const ctVal = S.ct_val || 0.1;
@@ -2798,10 +2795,9 @@ async function fetchPrecheck() {
   } catch (e) { /* 静默 */ }
 }
 
-async function fetchLeverOptions() {
+async function fetchLeverOptions(preloaded) {
   try {
-    const r = await fetch(API_BASE + '/api/v1/grid/leverage-options?inst_id=' + S.inst_id);
-    const d = await r.json();
+    const d = preloaded ? { data: preloaded } : await (await fetch(API_BASE + '/api/v1/grid/leverage-options?inst_id=' + S.inst_id)).json();
     if (!d.data || !d.data.options) return;
     const opts = d.data.options;
     // 更新杠杆滑块刻度
@@ -2815,10 +2811,9 @@ async function fetchLeverOptions() {
   } catch (e) { /* 静默 */ }
 }
 
-async function fetchBalance() {
+async function fetchBalance(preloaded) {
   try {
-    const r = await fetch(API_BASE + '/api/v1/balance');
-    const d = await r.json();
+    const d = preloaded ? { data: preloaded } : await (await fetch(API_BASE + '/api/v1/balance')).json();
     if (!d.data || !d.data.balance) return;
     const details = d.data.balance.details || [];
     const usdt = details.find(dt => dt.ccy === 'USDT');
@@ -2988,11 +2983,9 @@ function updateInlineFormulas() {
 }
 
 // ═══════════════════ 6H TREND ═══════════════════
-async function updateTrend() {
+async function updateTrend(preloaded) {
   try {
-    const r = await fetch(API_BASE + '/api/v1/trend');
-    if (!r.ok) return;
-    const j = await r.json();
+    const j = preloaded ? { data: preloaded } : await (await fetch(API_BASE + '/api/v1/trend')).json();
     const t = j.data || j;
     const dir = t.direction, stDir = t.st_direction;
     const ema10 = t.ema10, ema55 = t.ema55;
@@ -3168,10 +3161,9 @@ function renderOrders(rows) {
 }
 
 // ── 调平记录（历史订单过滤建仓 → 分组 + 统计条 + 最近3组）──
-async function fetchAdjust() {
+async function fetchAdjust(preloaded) {
   try {
-    const r = await fetch(API_BASE + '/api/v1/trade/adjust-history');
-    const d = await r.json();
+    const d = preloaded ? { data: preloaded } : await (await fetch(API_BASE + '/api/v1/trade/adjust-history')).json();
     renderAdjust(d.data || {});
   } catch (e) { /* 静默 */ }
 }
@@ -4341,34 +4333,45 @@ async function initInsts() {
 // - window.__dataBoot()：一次性启动全部数据拉取，供 BOOT 与顶层 refreshAfterLogin() 复用（修作用域）。
 function __dataBoot() {
   if (!AUTH.isLogged()) return;
-  // refresh() 立即独立执行：权益/持仓/状态卡秒出，不等 initInsts（adapter/state 网络慢时数据也不消失）
+  // refresh() 立即独立执行：权益/持仓/状态卡秒出（refresh 渲染 state 并设置 S.inst_id）
   try { refresh(); } catch(e) {}
-  try {
-    initInsts().then(function() {
-      if (S.inst_id) {
-        // 登录后数据加载：串行排队（一次一个），避免手机弱网并发打爆全部请求超时
-        var __seq = [
-          function(){ try { fetchMarketData(S.inst_id); } catch(e){} },
-          function(){ try { fetchPrecheck(); } catch(e){} },
-          function(){ try { fetchLeverOptions(); } catch(e){} },
-          function(){ try { fetchBalance(); } catch(e){} },
-          function(){ try { updateTrend(); } catch(e){} },
-          function(){ try { fetchAdjust(); } catch(e){} }
-        ];
-        // 顺序执行：每个完成后再发下一个（间隔 200ms，避免瞬时洪峰）
-        (function runNext(i){
-          if (i >= __seq.length) return;
-          __seq[i]();
-          setTimeout(function(){ runNext(i+1); }, 200);
-        })(0);
+  // 币种下拉独立填充（不阻塞首屏聚合）
+  try { initInsts(); } catch(e) {}
+  // 聚合接口 /api/v1/bootstrap：1 请求拿首屏全部数据 → 各渲染函数用 preloaded 渲染。
+  // 失败/超时(8s AbortController)回退到旧的串行逐接口路径，保证页面永远能出数据。
+  var __ab = new AbortController();
+  var __tm = setTimeout(function(){ __ab.abort(); }, 8000);
+  fetch(API_BASE + '/api/v1/bootstrap', { signal: __ab.signal })
+    .then(function(r){ if (!r.ok) throw new Error('bootstrap ' + r.status); return r.json(); })
+    .then(function(d){
+      clearTimeout(__tm);
+      var B = d && d.data;
+      if (B && B.state) {
+        try { fetchMarketData(S.inst_id, B.market); } catch(e){}
+        try { fetchPrecheck(B.precheck); } catch(e){}
+        try { fetchLeverOptions(B.leverage_options); } catch(e){}
+        try { fetchBalance(B.balance); } catch(e){}
+        try { updateTrend(B.trend); } catch(e){}
+        try { fetchAdjust(B.adjust_records); } catch(e){}
       } else {
-        try { updateTrend(); } catch(e){}
-        try { fetchAdjust(); } catch(e){}
+        __fallbackDataBoot();
       }
-    });
-  } catch(e) {}
-  // 登录后确保 K线首次加载（图表已就绪时；未就绪则 loadChartData 内 series 保护安全跳过）
+    })
+    .catch(function(){ clearTimeout(__tm); __fallbackDataBoot(); });
+  // K线首次加载独立（图表已就绪时；未就绪则 loadChartData 内 series 保护安全跳过）
   try { loadChartData(); } catch(e) {}
+}
+// bootstrap 失败/未就绪时的回退：旧的串行逐接口加载（一次一个，间隔 200ms）
+function __fallbackDataBoot() {
+  var __seq = [
+    function(){ try { fetchMarketData(S.inst_id); } catch(e){} },
+    function(){ try { fetchPrecheck(); } catch(e){} },
+    function(){ try { fetchLeverOptions(); } catch(e){} },
+    function(){ try { fetchBalance(); } catch(e){} },
+    function(){ try { updateTrend(); } catch(e){} },
+    function(){ try { fetchAdjust(); } catch(e){} }
+  ];
+  (function runNext(i){ if (i >= __seq.length) return; __seq[i](); setTimeout(function(){ runNext(i+1); }, 200); })(0);
 }
 window.__dataBoot = __dataBoot;
 
