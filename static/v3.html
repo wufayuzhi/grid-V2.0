@@ -2201,10 +2201,11 @@ async function loadChartData(bar, fit, incremental, instId) {
     const r = await fetch(url);
     const d = await r.json();
     if (!d.data || !d.data.length) return;
+    // 后端已返回正序(旧→新,模块A K线缓存正序化2026-08-19),TV图表要求正序,无需reverse
     const data = d.data.map(c => ({
       time: c[0] / 1000,
       open: parseFloat(c[1]), high: parseFloat(c[2]), low: parseFloat(c[3]), close: parseFloat(c[4])
-    })).reverse();
+    }));
     // 首次加载 / 切换币种或时段 → 全量 setData（此时才允许重置视图）
     if (key !== lastChartKey || !lastKlineData) {
       series.setData(data);
