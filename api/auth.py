@@ -131,6 +131,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
     # 免鉴权路径前缀
     FREE_PREFIXES = ("/api/v1/auth/", "/api/v1/auth/login", "/api/v1/auth/guest",
                      "/api/v1/logs/frontend")  # 前端错误上报：未登录时也可能发生，需免鉴权
+    # guest(有token)也可调用的低风险写操作：仅影响K线显示时间框架，不碰交易/资金/状态机
+    GUEST_WRITE_PREFIXES = ("/api/v1/market/ws_tf",)
     # 静态/登录页放行
     PASS_PREFIXES = ("/static/", "/static", "/W2/", "/W2", "/favicon.ico", "/health")
 
@@ -155,8 +157,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if role is None:
             return JSONResponse({"status": "error", "msg": "未登录或登录已过期"}, status_code=401)
 
-        # 4) 写操作：仅 admin
+        # 4) 写操作：仅 admin；低风险写操作(仅影响K线显示tf等,见 GUEST_WRITE_PREFIXES) guest也可调
         if _is_write_method(method) and role != "admin":
+            if any(norm.startswith(gw) for gw in self.GUEST_WRITE_PREFIXES):
+                return await call_next(request)
             return JSONResponse({"status": "error", "msg": "游客模式只读，无写操作权限"}, status_code=403)
 
         return await call_next(request)
