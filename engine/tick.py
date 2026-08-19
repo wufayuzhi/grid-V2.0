@@ -101,22 +101,34 @@ def _refresh_oi_full():
     refresh_oi()
 
 
+# 成交后即时重算标志：引擎成交/调平时置位，让 _refresh_bills_stats 跳过节流立即执行（实时层，零交易影响）
+_bills_dirty = False
+
+
+def mark_bills_dirty() -> None:
+    """成交/调平发生后调用，标记下次账单重算跳过节流立即执行。只设标志，绝不影响交易逻辑。"""
+    global _bills_dirty
+    _bills_dirty = True
+
+
 def _refresh_bills_stats() -> None:
     """2026-08-17 方案B：周期(每5分钟)用账单权威值覆盖引擎自算的 grid_count/total_fee/total_pnl。
 
     账单是唯一权威源(钱动了才有流水, 无引擎误判)。主引擎记账降级为完整性报警器。
     引擎成交时的 +1/+fees 保留为实时值, 此处周期覆盖为账单权威值(几分钟迟滞, 避开限流)。
+    2026-08-19 模块B：成交后(引擎置 _bills_dirty)立即重算(跳过节流 + force 绕过缓存)，调平记录接近实时、绝无漏记。
     """
-    global _bills_last_refresh
+    global _bills_last_refresh, _bills_dirty
     now = time.time()
-    if now - _bills_last_refresh < _BILLS_REFRESH_INTERVAL:
+    if not _bills_dirty and now - _bills_last_refresh < _BILLS_REFRESH_INTERVAL:
         return
+    _bills_dirty = False
     _bills_last_refresh = now
     try:
         from engine.grid import calc_bills_stats
         from state import save_state
         st = get_state()
-        stats = calc_bills_stats(st)
+        stats = calc_bills_stats(st, force=True)
         if not stats.get("ok"):
             logger.warning("账单周期重算: 拉取失败, 保留引擎值")
             return
@@ -128,6 +140,12 @@ def _refresh_bills_stats() -> None:
         st.total_fee = abs(stats.get("total_fee", 0.0))  # 正数: 前端 已实现+浮盈-手续费
         st.total_pnl = stats.get("total_pnl", st.total_pnl)
         st.adjust_records = (stats.get("records", []) or st.adjust_records or [])[-300:]
+        # 撤销单低频识别：账单(bills)无撤销流水，撤销单从订单历史识别（2026-08-19 并入低频任务）
+        try:
+            from api.routes import _merge_canceled_records
+            _merge_canceled_records(st)
+        except Exception as _ce:
+            logger.warning(f"撤销单识别失败: {_ce}")
         save_state()
         logger.info(f"账单周期重算: grid={st.grid_count} fee={st.total_fee:.2f} pnl={st.total_pnl:.2f}")
     except Exception as e:

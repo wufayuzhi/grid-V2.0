@@ -147,7 +147,7 @@ _bills_cache: dict = {}  # {inst_id: (ts, result_dict)}
 _BILLS_CACHE_TTL = 60.0
 
 
-def calc_bills_stats(st, inst_id=None, client=None) -> dict:
+def calc_bills_stats(st, inst_id=None, client=None, force=False) -> dict:
     """从交易所账单(bills)权威清洗调平相关指标（2026-08-17 新增，替代引擎自算/订单历史现算）。
 
     返回结构（所有字段都由账单流水清洗得出，交易所权威）：
@@ -167,7 +167,8 @@ def calc_bills_stats(st, inst_id=None, client=None) -> dict:
     import time as _time
     inst = inst_id or getattr(st, "inst_id", "")
     # 缓存命中：60 秒内同合约直接返回上次翻页结果，不再触发账单翻页(避开 OKX 429 限流)
-    if inst:
+    # force=True（成交后即时重算）时绕过缓存，确保拿到最新成交记录
+    if inst and not force:
         _cached = _bills_cache.get(inst)
         if _cached and _time.time() - _cached[0] < _BILLS_CACHE_TTL:
             return _cached[1]
@@ -1050,6 +1051,12 @@ def check_grid_tick(st) -> None:
             return
         _log(st, f"🔺 上端成交(平多+开空) → 撤下端, 重挂", cat="GRID")
         _notify_trade(st, "平多/开空", "upper")
+        # 成交后置脏标记：下一tick立即账单重算，调平记录接近实时（实时层，只设标志零交易影响）
+        try:
+            from engine.tick import mark_bills_dirty
+            mark_bills_dirty()
+        except Exception:
+            pass
         # 锚点 = 多头成交价（不随市价漂）；记录最近成交时间（12h提醒计时起点）
         if fill_up_px > 0:
             st.grid_anchor_px = fill_up_px
@@ -1088,6 +1095,12 @@ def check_grid_tick(st) -> None:
             return
         _log(st, f"🔻 下端成交(平空+开多) → 撤上端, 重挂", cat="GRID")
         _notify_trade(st, "平空/开多", "lower")
+        # 成交后置脏标记：下一tick立即账单重算，调平记录接近实时（实时层，只设标志零交易影响）
+        try:
+            from engine.tick import mark_bills_dirty
+            mark_bills_dirty()
+        except Exception:
+            pass
         # 锚点 = 空头成交价（不随市价漂）；记录最近成交时间（12h提醒计时起点）
         if fill_lo_px > 0:
             st.grid_anchor_px = fill_lo_px

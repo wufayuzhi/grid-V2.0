@@ -2152,23 +2152,9 @@ def register_routes(app: FastAPI):
         #             continue
         #         records.append(_build_record(g, gtype))
         #     st.adjust_records = records[-300:]
-        try:
-            from engine.grid import calc_bills_stats
-            stats = calc_bills_stats(st)
-            if stats.get("ok"):
-                st.adjust_records = stats.get("records", [])[-300:]
-                # 完整性报警: 翻页未拉全 或 账单次数<主引擎 → 记日志
-                _intg = stats.get("integrity", {})
-                if _intg and not _intg.get("ok", True):
-                    import logging
-                    logging.getLogger("routes").warning(f"adjust-history 账单校验告警: {_intg.get('note')}")
-        except Exception as _e:
-            import logging
-            logging.getLogger("routes").exception(f"adjust-history 账单清洗失败: {_e}")
-        # 撤销单补充：账单(bills)只有成交流水、没有撤销流水 → 撤销单从订单历史识别。
-        # 规则(用户2026-08-18确认)：只显示「4方向整组全部撤销(全未成交)」的撤销单，显示方式合并为🔴开空/平多、🟢开多/平空。
-        # 成交单仍由账单权威清洗生成(不动)；这里只追加 canceled 记录，避免重复/覆盖成交单。
-        _merge_canceled_records(st)
+        # 2026-08-19 模块B：adjust-history 改只读缓存，前端永不触发账单翻页(429 根治)。
+        #   调平记录由 tick 低频任务维护：成交触发即时重算(账单成交记录) + 5分钟兜底 + 撤销单低频识别。
+        #   数据最多秒级/分钟级滞后，但绝不再因前端请求翻账单。
         return {"status": "ok", "data": _serialize_adjust(st)}
 
     # ═══ 企微通知配置（前端可配置：长链接/群推送/大模型）═══

@@ -205,6 +205,7 @@ def _do_rebalance(st, imbalance, target, _start_new_round=False):
         r = rebalance_batch(heavy, per_batch, use_limit=True)
         if r.get("status") != "ok":
             return
+        _mark_bills_dirty_safe()
         st._rebalance_cur_batch = 1
         st._rebalance_batch_ts = now
         st.last_rebalance_ts = now
@@ -233,6 +234,7 @@ def _do_rebalance(st, imbalance, target, _start_new_round=False):
         r = rebalance_batch(heavy, per_batch, use_limit=not market_now)
         if r.get("status") != "ok":
             return
+        _mark_bills_dirty_safe()
         st._rebalance_cur_batch = cur_batch + 1
         st._rebalance_batch_ts = now
         st.last_rebalance_ts = now
@@ -253,6 +255,15 @@ def _do_rebalance(st, imbalance, target, _start_new_round=False):
         _log(st, f"🔄 [回补] 全部{batches}批完成，标记网格重挂",
              cat="REBAL", data={"total_batches": batches, "cnt": st.rebalance_cnt})
         save_state_lazy(st)
+
+
+def _mark_bills_dirty_safe() -> None:
+    """成交/调平动作后置脏标记，让账单重算即时执行（只设标志，异常不影响交易）。"""
+    try:
+        from engine.tick import mark_bills_dirty
+        mark_bills_dirty()
+    except Exception:
+        pass
 
 
 def save_state_lazy(st):
