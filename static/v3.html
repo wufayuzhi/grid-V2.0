@@ -3281,7 +3281,8 @@ function renderAdjust(data) {
   if (sEl) sEl.innerHTML = adjStatsHtml(data.stats);
   const tbody = document.getElementById('adj-tbl')?.querySelector('tbody');
   if (!tbody) return;
-  const recs = _filterAdjustRecords(data.recent || [], window._adjustFilter);
+  // 主表格=最近3组：后端返回 records(无 recent 字段) → 取 records 前3条兜底
+  const recs = _filterAdjustRecords(data.recent || (data.records || []).slice(0, 3), window._adjustFilter);
   tbody.innerHTML = recs.length ? recs.map(r => adjRow(r, false)).join('')
     : '<tr><td colspan="7" style="text-align:center;color:var(--t3)">无该类型记录</td></tr>';
   const btn = document.getElementById('adj-expand');
