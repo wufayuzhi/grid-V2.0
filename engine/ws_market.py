@@ -38,8 +38,15 @@ _CANDLE_INTERVAL = 1.0
 
 
 def _build_subscribe_msgs(inst: str) -> list[dict]:
-    """构造订阅消息：4 个行情频道（candle 走 REST，不入 WS）。"""
-    args = [{"channel": ch, "instId": inst} for ch in _SUBSCRIBE_CHANNELS]
+    """构造订阅消息：4 个行情频道（candle 走 REST，不入 WS）。
+    注意：index-tickers 指数频道 instId 须用基础代码(去 -SWAP, 如 ETH-USDT)，
+    否则 60018 订阅失败；其余频道用合约代码(ETH-USDT-SWAP)。"""
+    args = []
+    for ch in _SUBSCRIBE_CHANNELS:
+        iid = inst
+        if ch == "index-tickers":
+            iid = inst.replace("-SWAP", "")
+        args.append({"channel": ch, "instId": iid})
     return [{"op": "subscribe", "args": args}]
 
 
@@ -102,8 +109,9 @@ async def _ws_loop(running: asyncio.Event) -> None:
                     if msg.get("event") == "error":
                         logger.warning(f"WS error: {msg}")
                         continue
-                    arg_inst = msg.get("arg", {}).get("instId", inst)
-                    _dispatch(arg_inst, msg)
+                    # 统一用当前合约 inst 写缓存 key(index-tickers 推送的 arg instId 是 ETH-USDT,
+                    # 不是交易合约 ETH-USDT-SWAP，若用它写缓存会 key 不匹配导致 _sync_state 不同步)
+                    _dispatch(inst, msg)
         except asyncio.CancelledError:
             break
         except Exception as ex:
