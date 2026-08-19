@@ -29,6 +29,11 @@ class GridPosition:
     liqPx: float = 0.0            # 兼容字段（组合强平，交易所能给则给）
     position_margin: float = 0.0  # 持仓保证金（交易所）
     notional_usd: float = 0.0     # 名义价值（交易所）
+    # 多空分开（交易所按 posSide 分别给）——前端展示
+    long_position_margin: float = 0.0
+    long_notional: float = 0.0
+    short_position_margin: float = 0.0
+    short_notional: float = 0.0
 
 
 @dataclass
@@ -260,6 +265,8 @@ class GridState:
                 "unrealized_pnl": round(pos.long_unrealized_pnl, 2),
                 "liq_px": px_round(self.inst_id, pos.long_liq_px),
                 "be_px": px_round(self.inst_id, pos.long_be_px),
+                "margin": round(pos.long_position_margin, 2),
+                "notional": round(pos.long_notional, 2),
             },
             "short": {
                 "contracts": pos.short_contracts,
@@ -267,6 +274,8 @@ class GridState:
                 "unrealized_pnl": round(pos.short_unrealized_pnl, 2),
                 "liq_px": px_round(self.inst_id, pos.short_liq_px),
                 "be_px": px_round(self.inst_id, pos.short_be_px),
+                "margin": round(pos.short_position_margin, 2),
+                "notional": round(pos.short_notional, 2),
             },
             "params": {
                 "capital": round(self.grid_available, 2),

@@ -122,6 +122,9 @@ def _apply_position_to_state(p: dict, st) -> None:
     liq_px = _safe_float(p.get("liqPx"))
     be_px = _safe_float(p.get("bePx"))          # 盈亏平衡价（新加）
     margin = _safe_float(p.get("margin"))
+    # 全仓模式(cross) margin返回空, imr即该仓持仓保证金金额(≈notional/杠杆); 逐仓时margin有值
+    if margin <= 0 and p.get("mgnMode") == "cross":
+        margin = _safe_float(p.get("imr"))
     notional = _safe_float(p.get("notionalUsd"))
     mark_px = _safe_float(p.get("markPx"))
 
@@ -133,6 +136,8 @@ def _apply_position_to_state(p: dict, st) -> None:
         # 无条件写入：实盘 liqPx=0 是合法值(完全对冲无风险)，必须覆盖模拟盘残留假值
         pos.long_liq_px = liq_px
         pos.long_be_px = be_px
+        pos.long_position_margin = margin
+        pos.long_notional = notional
     elif side == "short":
         pos.short_contracts = contracts
         pos.short_avg_px = avg_px
@@ -140,6 +145,8 @@ def _apply_position_to_state(p: dict, st) -> None:
         # 无条件写入：同上
         pos.short_liq_px = liq_px
         pos.short_be_px = be_px
+        pos.short_position_margin = margin
+        pos.short_notional = notional
     # 通用字段（有值才覆盖）
     if mark_px > 0:
         pos.mark_px = mark_px
