@@ -120,7 +120,8 @@ def _refresh_bills_stats() -> None:
     """
     global _bills_last_refresh, _bills_dirty
     now = time.time()
-    if not _bills_dirty and now - _bills_last_refresh < _BILLS_REFRESH_INTERVAL:
+    _was_dirty = _bills_dirty
+    if not _was_dirty and now - _bills_last_refresh < _BILLS_REFRESH_INTERVAL:
         return
     _bills_dirty = False
     _bills_last_refresh = now
@@ -128,7 +129,7 @@ def _refresh_bills_stats() -> None:
         from engine.grid import calc_bills_stats
         from state import save_state
         st = get_state()
-        stats = calc_bills_stats(st, force=True)
+        stats = calc_bills_stats(st, force=_was_dirty)
         if not stats.get("ok"):
             logger.warning("账单周期重算: 拉取失败, 保留引擎值")
             return
