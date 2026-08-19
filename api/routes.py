@@ -857,11 +857,12 @@ def register_routes(app: FastAPI):
         except Exception:
             data["pending"] = []
 
-        # 8) adjust_records —— 后端缓存，不重跑账单翻页（防卡/防限流）
+        # 8) adjust_records —— 统一走 _serialize_adjust（与 adjust-history 同结构 {records,recent,stats}，
+        #    后端缓存不重跑账单翻页；避免前端 fetchAdjust 收到 list 导致 renderAdjust 读不到 records/recent）
         try:
-            data["adjust_records"] = (getattr(st, "adjust_records", None) or [])[-300:]
+            data["adjust_records"] = _serialize_adjust(st)
         except Exception:
-            data["adjust_records"] = []
+            data["adjust_records"] = {"records": [], "recent": [], "total": 0, "stats": {}}
 
         # 9) insts —— 可用合约列表
         try:
