@@ -144,7 +144,7 @@ def _fetch_all_order_history(client, inst_id):
 # 账单权威清洗结果缓存：避免前端频繁打开页面 / 主引擎周期调用时反复翻页拉账单触发 OKX 429 限流。
 # 账单是慢变量(几小时才变一次)，60 秒缓存不影响准确性；切合约按 inst_id 自动失效。
 _bills_cache: dict = {}  # {inst_id: (ts, result_dict)}
-_BILLS_CACHE_TTL = 60.0
+_BILLS_CACHE_TTL = 300.0  # 5分钟: 对账之间/adjust-history命中缓存不翻页(避开OKX 429限流); force成交即时仍绕过
 
 
 def calc_bills_stats(st, inst_id=None, client=None, force=False) -> dict:

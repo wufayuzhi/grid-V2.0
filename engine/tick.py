@@ -28,7 +28,7 @@ _ATR_REFRESH_INTERVAL = 60.0
 
 # 账单权威重算节流（2026-08-17 新增，方案B：周期用账单覆盖引擎自算值，几分钟迟滞避开限流）
 _bills_last_refresh = 0.0
-_BILLS_REFRESH_INTERVAL = 300.0  # 每5分钟用账单权威值覆盖 grid_count/total_fee/total_pnl
+_BILLS_REFRESH_INTERVAL = 600.0  # 每10分钟用账单权威值覆盖(低频→撞429概率减半); 成交dirty仍即时
 
 
 def _clear_residual_stats(st) -> None:
@@ -111,6 +111,7 @@ def _refresh_oi_full():
 
 # 成交后即时重算标志：引擎成交/调平时置位，让 _refresh_bills_stats 跳过节流立即执行（实时层，零交易影响）
 _bills_dirty = False
+_bills_fail_count = 0  # 账单对账连续失败计数(429退避重试用): 成功清零
 
 
 def mark_bills_dirty() -> None:
@@ -126,7 +127,7 @@ def _refresh_bills_stats() -> None:
     引擎成交时的 +1/+fees 保留为实时值, 此处周期覆盖为账单权威值(几分钟迟滞, 避开限流)。
     2026-08-19 模块B：成交后(引擎置 _bills_dirty)立即重算(跳过节流 + force 绕过缓存)，调平记录接近实时、绝无漏记。
     """
-    global _bills_last_refresh, _bills_dirty
+    global _bills_last_refresh, _bills_dirty, _bills_fail_count
     now = time.time()
     _was_dirty = _bills_dirty
     if not _was_dirty and now - _bills_last_refresh < _BILLS_REFRESH_INTERVAL:
@@ -139,8 +140,13 @@ def _refresh_bills_stats() -> None:
         st = get_state()
         stats = calc_bills_stats(st, force=_was_dirty)
         if not stats.get("ok"):
-            logger.warning("账单周期重算: 拉取失败, 保留引擎值")
+            # 撞429/拉取失败: 指数退避快速重试(60s起,上限300s), 而非等完整周期; 成功则清零
+            _bills_fail_count += 1
+            _retry_after = min(60 * (2 ** (_bills_fail_count - 1)), 300)
+            _bills_last_refresh = now - (_BILLS_REFRESH_INTERVAL - _retry_after)
+            logger.warning(f"账单周期重算: 拉取失败({_bills_fail_count}连败), 保留引擎值; {_retry_after}s后重试")
             return
+        _bills_fail_count = 0
         # 账单权威值覆盖(仅当账单非空且翻页完整)
         _intg = stats.get("integrity", {})
         if _intg and not _intg.get("ok", True):
