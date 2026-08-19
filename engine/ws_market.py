@@ -1,14 +1,14 @@
 """
-engine/ws_market.py — 模块A：OKX WebSocket 公共频道行情订阅（只读）。
+engine/ws_market.py — 模块A：OKX 行情实时获取（只读）。
 
-架构（用户2026-08-19确认「WS + 低频REST 并线」）：
-  · WS 实时推送（主通道，毫秒级）→ 更新 data/ticker 统一缓存
-  · 低频 REST 5s 并线兜底（由 tick.py 的 REST 轮询维持，WS断线不中断）
-  · 断线：指数退避重连（1s→2s→4s→…上限30s），重连后自动重新订阅 + REST 首拉K线
-  · 切币/切tf：每秒检测 st.inst_id / st.ws_candle_tf 变化 → 断开重连重订阅
+架构（用户2026-08-19确认「WS 主推 + REST 并线」）：
+  · 行情 WS（主通道，毫秒级）→ tickers/index-tickers/mark-price/open-interest → 更新统一缓存
+  · K线（candle）走 REST 每秒增量拉取 + 缓存（实测: OKX 此环境 WS candle 频道 60018 不可用；
+    公开K线接口限流宽(20次/2s)，每秒1次安全不429；行情走WS毫秒级）
+  · 断线：指数退避重连（1s→2s→4s→…上限30s），重连后自动重新订阅
+  · 切币/切tf：每秒检测 st.inst_id / st.ws_candle_tf 变化 → 断开重连重订阅 + K线重首拉
 
-只读铁律：仅订阅公共频道（tickers/index-tickers/mark-price/open-interest/candle），
-绝不下单/撤单/平仓/改状态。
+只读铁律：仅订阅公共频道，绝不下单/撤单/平仓/改状态。
 """
 from __future__ import annotations
 import asyncio
@@ -26,21 +26,24 @@ logger = logging.getLogger("ws_market")
 # OKX 公共行情 WS 端点（只读）
 WS_URL = "wss://ws.okx.com:8443/ws/v5/public"
 
-# 当前合约订阅的 4 个行情频道（candle 单独按当前 tf 追加）
+# 行情订阅频道（candle 已确认此环境 WS 不可用，走 REST 每秒增量）
 _SUBSCRIBE_CHANNELS = ["tickers", "index-tickers", "mark-price", "open-interest"]
 
 # 每秒检测切币/切tf 的轮询间隔
 _INST_CHECK_INTERVAL = 1.0
+# K线 REST 每秒增量拉取的根数(公开接口限流宽,安全)
+_CANDLE_INC = 5
+# K线每秒增量间隔
+_CANDLE_INTERVAL = 1.0
 
 
-def _build_subscribe_msgs(inst: str, tf: str) -> list[dict]:
-    """构造订阅消息：4 个行情频道 + candle(当前 tf)。"""
+def _build_subscribe_msgs(inst: str) -> list[dict]:
+    """构造订阅消息：4 个行情频道（candle 走 REST，不入 WS）。"""
     args = [{"channel": ch, "instId": inst} for ch in _SUBSCRIBE_CHANNELS]
-    args.append({"channel": "candle" + tf, "instId": inst})
     return [{"op": "subscribe", "args": args}]
 
 
-def _dispatch(inst: str, msg: dict, tf: str) -> None:
+def _dispatch(inst: str, msg: dict) -> None:
     """按频道分发 WS 推送 → 更新统一缓存。"""
     try:
         ch = msg.get("arg", {}).get("channel", "")
@@ -54,10 +57,9 @@ def _dispatch(inst: str, msg: dict, tf: str) -> None:
                 T.apply_ws_idx_px(inst, d)
             elif ch == "open-interest":
                 T.apply_ws_oi(inst, d)
-            elif ch.startswith("candle"):
-                T.apply_ws_candle(inst, d, tf)
     except Exception as ex:
         logger.warning(f"_dispatch({msg.get('arg')}): {ex}")
+
 
 
 async def _ws_loop(running: asyncio.Event) -> None:
@@ -71,12 +73,11 @@ async def _ws_loop(running: asyncio.Event) -> None:
             if not inst:
                 await asyncio.sleep(1)
                 continue
-            # 连接前 REST 首拉历史K线初始化缓存（启动/切币/切tf后）
-            T.init_candle_cache(inst, tf)
+            # 连接后发送订阅（candle 由 _candle_refresh_loop 走 REST 每秒增量）
             async with websockets.connect(
                 WS_URL, ping_interval=20, ping_timeout=20, max_size=None
             ) as ws:
-                for m in _build_subscribe_msgs(inst, tf):
+                for m in _build_subscribe_msgs(inst):
                     await ws.send(json.dumps(m))
                 logger.info(f"WS已连接并订阅: {inst} tf={tf}")
                 backoff = 1  # 连接成功重置退避
@@ -102,7 +103,7 @@ async def _ws_loop(running: asyncio.Event) -> None:
                         logger.warning(f"WS error: {msg}")
                         continue
                     arg_inst = msg.get("arg", {}).get("instId", inst)
-                    _dispatch(arg_inst, msg, tf)
+                    _dispatch(arg_inst, msg)
         except asyncio.CancelledError:
             break
         except Exception as ex:
@@ -114,7 +115,36 @@ async def _ws_loop(running: asyncio.Event) -> None:
             backoff = min(backoff * 2, 30)
 
 
+async def _candle_refresh_loop(running: asyncio.Event,
+                               interval: float = _CANDLE_INTERVAL) -> None:
+    """K线实时：每秒 REST 拉当前合约当前tf最近K线，增量更新缓存。
+    公开K线接口限流宽(20次/2s)，每秒1次安全不429；行情已走WS毫秒级。
+    OKX get_candles 返回倒序(新在前) → reversed 后逐根 apply_ws_candle 增量更新(按ts去重/追加)。"""
+    from data.ticker import get_client
+    while not running.is_set():
+        try:
+            st = get_state()
+            inst = st.inst_id
+            tf = getattr(st, "ws_candle_tf", "1m") or "1m"
+            if inst:
+                raw = await asyncio.to_thread(get_client().get_candles, inst, tf, _CANDLE_INC)
+                if raw:
+                    if not T.get_candle_cache(inst, tf):
+                        T.init_candle_cache(inst, tf)  # 启动/切tf首拉历史K线
+                    for d in reversed(raw):
+                        T.apply_ws_candle(inst, d, tf)
+        except asyncio.CancelledError:
+            break
+        except Exception as ex:
+            logger.warning(f"_candle_refresh_loop: {ex}")
+        try:
+            await asyncio.wait_for(running.wait(), timeout=interval)
+        except asyncio.TimeoutError:
+            pass
+
+
 def start_ws_task(loop: asyncio.AbstractEventLoop) -> asyncio.Task:
-    """在事件循环中启动 WS 后台任务。"""
+    """在事件循环中启动行情任务：WS 循环(行情毫秒级) + K线每秒增量循环(REST)。"""
     running = asyncio.Event()
-    return loop.create_task(_ws_loop(running))
+    loop.create_task(_ws_loop(running))
+    return loop.create_task(_candle_refresh_loop(running))

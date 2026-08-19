@@ -421,7 +421,8 @@ def init_candle_cache(inst_id: str, tf: str, limit: int = 300) -> None:
         raw = get_client().get_candles(inst_id, bar=tf, limit=limit)
         if not raw:
             return
-        _candle_cache[inst_id] = {"tf": tf, "bars": list(raw), "ts": time.time()}
+        # OKX get_candles 返回倒序(新在前) → 转正序(旧→新) 适配前端/增量追加
+        _candle_cache[inst_id] = {"tf": tf, "bars": list(reversed(raw)), "ts": time.time()}
         logger.info(f"init_candle_cache({inst_id},{tf}) 首拉 {len(raw)} 根")
     except Exception as ex:
         logger.warning(f"init_candle_cache({inst_id},{tf}): {ex}")
