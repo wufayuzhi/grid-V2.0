@@ -2164,6 +2164,7 @@ function fsSetTf(tf, btn) {
   if (btn) btn.classList.add('active');
   const barMap = { '1m': '1m', '5m': '5m', '15m': '15m', '1h': '1H', '4h': '4H', '6h': '6H', '1D': '1D' };
   S.cur_tf = barMap[tf] || '15m';
+  syncWsTf(S.cur_tf);
   loadChartData(S.cur_tf, true);
 }
 
@@ -2379,11 +2380,16 @@ function updateZoneReadout() {
   if (bleedEl) bleedEl.textContent = eq > 0 ? (eq * bl / 100).toFixed(0) + 'U' : '—';
 }
 
+// 切K线时间框架 → 通知后端更新 candle tf(否则后端每秒REST任务仍拉旧tf,切到1H/4H的K线不实时)
+function syncWsTf(tf) {
+  try { fetch(API_BASE + '/api/v1/market/ws_tf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tf: tf }) }); } catch (e) {}
+}
 function setTf(tf, el) {
   document.querySelectorAll('.frame-row button').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
   const barMap = { '1m': '1m', '5m': '5m', '15m': '15m', '1h': '1H', '4h': '4H', '6h': '6H', '1D': '1D' };
   S.cur_tf = barMap[tf] || '15m';
+  syncWsTf(S.cur_tf);
   loadChartData(S.cur_tf);
 }
 
