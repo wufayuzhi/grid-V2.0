@@ -26,7 +26,7 @@ import datetime
 import importlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Body
 from fastapi.responses import FileResponse
 from starlette.requests import Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -1106,8 +1106,9 @@ def register_routes(app: FastAPI):
         return {"status": "ok", "data": data}
 
     @app.post("/api/v1/market/ws_tf")
-    async def set_ws_tf(tf: str = "1m"):
-        """模块A：前端切K线时间框架时通知后端更新 WS candle 订阅(触发重订阅)。"""
+    async def set_ws_tf(payload: dict = Body(default={})):
+        """模块A：前端切K线时间框架时通知后端更新 candle tf(触发每秒REST任务换tf拉K线)。tf 从 body 读。"""
+        tf = str((payload or {}).get("tf", "") or "1m")
         st = get_state()
         if st is None or not tf:
             return {"status": "error", "msg": "缺 tf"}
